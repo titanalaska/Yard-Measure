@@ -255,6 +255,27 @@
     border-radius: 8px;
   }
 
+  /* SNAPSHOT */
+  #snapshot-section {
+    padding: 4px 16px 0;
+  }
+
+  #job-label {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid #e0e0e0;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--dark);
+    background: white;
+  }
+
+  #job-label:focus {
+    outline: none;
+    border-color: var(--green-light);
+  }
+
   /* BUTTONS */
   #controls {
     padding: 16px;
@@ -405,6 +426,10 @@
   </div>
 </div>
 
+<div id="snapshot-section">
+  <input type="text" id="job-label" placeholder="Job name or address (optional)" maxlength="60">
+</div>
+
 <div id="controls">
   <button class="btn btn-primary" id="pin-btn" disabled>
     <span>📍</span> Drop Pin Here
@@ -417,6 +442,9 @@
       🗑 Clear
     </button>
   </div>
+  <button class="btn btn-secondary" id="snapshot-btn" disabled>
+    📤 Save Snapshot
+  </button>
 </div>
 
 <div id="toast"></div>
@@ -447,6 +475,8 @@
   const pinCountEl = document.getElementById('pin-count');
   const canvas = document.getElementById('shape-canvas');
   const ctx = canvas.getContext('2d');
+  const snapshotBtn = document.getElementById('snapshot-btn');
+  const jobLabelInput = document.getElementById('job-label');
 
   // ── GPS ──────────────────────────────────────────────
   function startGPS() {
@@ -584,6 +614,7 @@
     document.getElementById('result-range').innerHTML = '';
     document.getElementById('result-warning').style.display = 'none';
     calcBtn.disabled = true;
+    snapshotBtn.disabled = true;
     drawShape();
   });
 
@@ -597,6 +628,7 @@
       resultExtra.innerHTML = '';
       document.getElementById('result-range').innerHTML = '';
       document.getElementById('result-warning').style.display = 'none';
+      snapshotBtn.disabled = true;
       drawShape();
     }
   }
@@ -676,6 +708,7 @@
     extras.push(`${Math.round(sqyd).toLocaleString()} sq yd`);
     resultExtra.innerHTML = extras.join(' &nbsp;·&nbsp; ');
 
+    snapshotBtn.disabled = false;
     drawShape();
   }
 
@@ -776,6 +809,188 @@
       ctx.fillStyle = i === 0 ? '#c8a84b' : '#2d6a2d';
       ctx.fill();
     });
+  }
+
+  // ── SNAPSHOT EXPORT ──────────────────────────────────
+  // Builds a clean, purpose-made result card (not a raw phone screenshot)
+  // for dropping into Buildertrend or similar job-tracking software.
+  snapshotBtn.addEventListener('click', () => {
+    exportSnapshot().catch(() => showToast('Could not create snapshot'));
+  });
+
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+
+  function drawShapeOn(g, pins, x, y, w, h) {
+    if (pins.length < 2) return;
+    const latRef = pins[0].lat;
+    const lngRef = pins[0].lng;
+    const R = 6371000;
+    const pts = pins.map(p => ({
+      x: (p.lng - lngRef) * Math.PI / 180 * R * Math.cos(latRef * Math.PI / 180),
+      y: -(p.lat - latRef) * Math.PI / 180 * R,
+    }));
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const pad = 20;
+    const scaleX = (w - pad * 2) / (maxX - minX || 1);
+    const scaleY = (h - pad * 2) / (maxY - minY || 1);
+    const scale = Math.min(scaleX, scaleY);
+    const offX = x + (w - (maxX - minX) * scale) / 2;
+    const offY = y + (h - (maxY - minY) * scale) / 2;
+    const toCanvas = p => ({ x: offX + (p.x - minX) * scale, y: offY + (p.y - minY) * scale });
+    const cPts = pts.map(toCanvas);
+
+    g.beginPath();
+    g.moveTo(cPts[0].x, cPts[0].y);
+    cPts.slice(1).forEach(p => g.lineTo(p.x, p.y));
+    g.closePath();
+    g.fillStyle = 'rgba(45,106,45,0.12)';
+    g.fill();
+    g.strokeStyle = '#2d6a2d';
+    g.lineWidth = 3;
+    g.stroke();
+
+    cPts.forEach((p, i) => {
+      g.beginPath();
+      g.arc(p.x, p.y, 10, 0, Math.PI * 2);
+      g.fillStyle = i === 0 ? '#c8a84b' : '#2d6a2d';
+      g.fill();
+      g.fillStyle = '#ffffff';
+      g.font = '700 14px -apple-system, "Segoe UI", sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(String(i + 1), p.x, p.y);
+      g.textBaseline = 'alphabetic';
+    });
+  }
+
+  function slugify(s) {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40);
+  }
+
+  async function exportSnapshot() {
+    const W = 1080, H = 1350;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const g = c.getContext('2d');
+    const F = '-apple-system, "Segoe UI", sans-serif';
+
+    g.fillStyle = '#f5f5f3';
+    g.fillRect(0, 0, W, H);
+
+    // header
+    g.fillStyle = '#2d6a2d';
+    g.fillRect(0, 0, W, 150);
+    g.textAlign = 'left';
+    g.fillStyle = '#ffffff';
+    g.font = `700 44px ${F}`;
+    g.fillText('📐 Yard Measure', 40, 72);
+    g.globalAlpha = 0.8;
+    g.font = `400 22px ${F}`;
+    g.fillText(new Date().toLocaleString(), 40, 112);
+    g.globalAlpha = 1;
+
+    // result block
+    g.fillStyle = '#2d6a2d';
+    g.fillRect(0, 150, W, 330);
+    g.textAlign = 'center';
+    g.globalAlpha = 0.7;
+    g.fillStyle = '#ffffff';
+    g.font = `700 24px ${F}`;
+    g.fillText('ESTIMATED AREA', W / 2, 210);
+    g.globalAlpha = 1;
+
+    g.fillStyle = '#c8a84b';
+    g.font = `800 140px ${F}`;
+    g.fillText(resultSqft.textContent, W / 2, 345);
+
+    g.fillStyle = '#ffffff';
+    g.globalAlpha = 0.9;
+    g.font = `400 30px ${F}`;
+    g.fillText('square feet', W / 2, 385);
+    g.globalAlpha = 1;
+
+    const rangeText = document.getElementById('result-range').textContent.trim();
+    if (rangeText) {
+      g.fillStyle = '#e8d9a8';
+      g.font = `600 26px ${F}`;
+      g.fillText(rangeText, W / 2, 425);
+    }
+
+    const extraText = resultExtra.textContent.trim();
+    if (extraText) {
+      g.globalAlpha = 0.85;
+      g.fillStyle = '#ffffff';
+      g.font = `400 24px ${F}`;
+      g.fillText(extraText.replace(/\s*·\s*/g, '   ·   '), W / 2, 460);
+      g.globalAlpha = 1;
+    }
+
+    // job label
+    g.textAlign = 'left';
+    let y = 530;
+    const jobLabel = jobLabelInput.value.trim();
+    if (jobLabel) {
+      g.fillStyle = '#1a1a1a';
+      g.font = `700 32px ${F}`;
+      g.fillText(jobLabel, 40, y);
+      y += 30;
+    }
+
+    // shape card
+    const cardTop = y + 10;
+    const cardH = 460;
+    g.fillStyle = '#ffffff';
+    roundRect(g, 40, cardTop, W - 80, cardH, 16);
+    g.fill();
+    g.strokeStyle = '#e0e0e0';
+    g.lineWidth = 2;
+    roundRect(g, 40, cardTop, W - 80, cardH, 16);
+    g.stroke();
+    drawShapeOn(g, state.pins, 70, cardTop + 30, W - 140, cardH - 60);
+
+    // footer meta
+    const footY = cardTop + cardH + 50;
+    const avgAcc = state.pins.reduce((s, p) => s + p.accuracy, 0) / state.pins.length;
+    g.fillStyle = '#555';
+    g.font = `400 24px ${F}`;
+    g.fillText(`${state.pins.length} corner pins · avg accuracy ±${Math.round(avgAcc)} ft`, 40, footY);
+    g.globalAlpha = 0.6;
+    g.font = `400 20px ${F}`;
+    g.fillText('Generated with Yard Measure', 40, footY + 36);
+    g.globalAlpha = 1;
+
+    const blob = await new Promise(resolve => c.toBlob(resolve, 'image/png', 0.95));
+    const filename = `yard-measure-${jobLabel ? slugify(jobLabel) + '-' : ''}${Date.now()}.png`;
+    const file = new File([blob], filename, { type: 'image/png' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Yard Measure' });
+        showToast('Snapshot shared');
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast('Snapshot saved');
   }
 
   // ── TOAST ────────────────────────────────────────────
