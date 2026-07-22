@@ -255,6 +255,128 @@
     border-radius: 8px;
   }
 
+  /* LAYERS */
+  #layers-section {
+    padding: 16px 16px 0;
+  }
+
+  .layer-item {
+    background: white;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    animation: slideIn 0.2s ease;
+  }
+
+  .layer-row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .layer-material {
+    flex: 1;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    min-width: 0;
+  }
+
+  .layer-material:focus {
+    outline: none;
+    border-color: var(--green-light);
+  }
+
+  .layer-row2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .layer-depth {
+    width: 70px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+
+  .layer-depth:focus {
+    outline: none;
+    border-color: var(--green-light);
+  }
+
+  .layer-unit {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 8px 6px;
+    font-size: 13px;
+    font-family: inherit;
+    background: white;
+  }
+
+  .layer-volume {
+    margin-left: auto;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--green);
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  .layer-row3 {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .layer-field {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    min-width: 0;
+  }
+
+  .layer-field input {
+    border: none;
+    width: 100%;
+    min-width: 0;
+    font-size: 13px;
+    font-family: inherit;
+    padding: 0;
+  }
+
+  .layer-field input:focus {
+    outline: none;
+  }
+
+  .layer-field-suffix {
+    font-size: 11px;
+    color: var(--mid);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .layers-total {
+    background: var(--green-pale);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 10px 0 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--green);
+    text-align: center;
+  }
+
   /* SNAPSHOT */
   #snapshot-section {
     padding: 4px 16px 0;
@@ -426,6 +548,16 @@
   </div>
 </div>
 
+<div id="layers-section" style="display:none;">
+  <div class="section-header">
+    <span class="section-title">Material Layers</span>
+    <span class="pin-count" id="layers-count">0 layers</span>
+  </div>
+  <div id="layers-list"></div>
+  <button class="btn btn-secondary" id="add-layer-btn">+ Add Layer</button>
+  <div id="layers-total" class="layers-total" style="display:none;"></div>
+</div>
+
 <div id="snapshot-section">
   <input type="text" id="job-label" placeholder="Job name or address (optional)" maxlength="60">
 </div>
@@ -458,6 +590,9 @@
     lastFixTime: null,
     recentFixes: [], // rolling buffer of {lat, lng, accuracy, t} for averaging
     stale: false,
+    layers: [], // {id, material, depth, unit}
+    nextLayerId: 1,
+    areaSqft: 0,
   };
 
   const STALE_MS = 6000;
@@ -477,6 +612,11 @@
   const ctx = canvas.getContext('2d');
   const snapshotBtn = document.getElementById('snapshot-btn');
   const jobLabelInput = document.getElementById('job-label');
+  const layersSection = document.getElementById('layers-section');
+  const layersList = document.getElementById('layers-list');
+  const layersCountEl = document.getElementById('layers-count');
+  const layersTotalEl = document.getElementById('layers-total');
+  const addLayerBtn = document.getElementById('add-layer-btn');
 
   // ── GPS ──────────────────────────────────────────────
   function startGPS() {
@@ -594,6 +734,7 @@
     calcBtn.disabled = state.pins.length < 3;
     showToast(`Pin ${state.pins.length} dropped (${fixes.length} fix${fixes.length !== 1 ? 'es' : ''} averaged)`);
     if (state.pins.length >= 3) autoCalc();
+    saveState();
   });
 
   calcBtn.addEventListener('click', () => {
@@ -615,7 +756,12 @@
     document.getElementById('result-warning').style.display = 'none';
     calcBtn.disabled = true;
     snapshotBtn.disabled = true;
+    state.areaSqft = 0;
+    state.layers = [];
+    layersSection.style.display = 'none';
+    renderLayers();
     drawShape();
+    clearSavedState();
   });
 
   function removePin(id) {
@@ -629,8 +775,11 @@
       document.getElementById('result-range').innerHTML = '';
       document.getElementById('result-warning').style.display = 'none';
       snapshotBtn.disabled = true;
+      state.areaSqft = 0;
+      layersSection.style.display = 'none';
       drawShape();
     }
+    saveState();
   }
 
   function renderPins() {
@@ -684,6 +833,9 @@
     const acres = sqm / 4046.86;
 
     resultSqft.textContent = Math.round(sqft).toLocaleString();
+    state.areaSqft = sqft;
+    layersSection.style.display = 'block';
+    renderLayers();
 
     // Accuracy range: estimate perimeter error using avg pin accuracy
     // Each pin contributes its accuracy to adjacent edge lengths
@@ -757,6 +909,142 @@
       }
     }
     return false;
+  }
+
+  // ── MATERIAL LAYERS ──────────────────────────────────
+  // area (already computed) × dig depth = volume, for each stacked layer
+  // (e.g. D-1 base to grade, then asphalt/pavers on top). Waste/compaction %
+  // and density are both optional per layer — density mainly matters for
+  // topsoil, where it swings a lot; other materials are fairly standard so
+  // crews can just leave it blank and skip the tons conversion.
+  function layerVolume(l) {
+    const depth = parseFloat(l.depth);
+    if (!state.areaSqft || !depth || depth <= 0) return null;
+    const depthFt = l.unit === 'in' ? depth / 12 : depth;
+    const rawCuft = state.areaSqft * depthFt;
+    const wastePct = parseFloat(l.wastePct);
+    const cuft = wastePct > 0 ? rawCuft * (1 + wastePct / 100) : rawCuft;
+    const cuyd = cuft / 27;
+    const density = parseFloat(l.density);
+    const tons = density > 0 ? cuyd * density : null;
+    return { cuft, cuyd, tons };
+  }
+
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  addLayerBtn.addEventListener('click', () => {
+    state.layers.push({ id: state.nextLayerId++, material: '', depth: '', unit: 'in', wastePct: '', density: '' });
+    renderLayers();
+    const materialInputs = layersList.querySelectorAll('.layer-material');
+    const lastInput = materialInputs[materialInputs.length - 1];
+    if (lastInput) lastInput.focus();
+    saveState();
+  });
+
+  layersList.addEventListener('input', (e) => {
+    const item = e.target.closest('.layer-item');
+    if (!item) return;
+    const layer = state.layers.find(l => l.id === Number(item.dataset.id));
+    if (!layer) return;
+    if (e.target.classList.contains('layer-material')) {
+      layer.material = e.target.value;
+    } else if (e.target.classList.contains('layer-depth')) {
+      layer.depth = e.target.value;
+      item.querySelector('.layer-volume').textContent = volumeLabel(layer);
+      updateLayersTotal();
+    } else if (e.target.classList.contains('layer-waste')) {
+      layer.wastePct = e.target.value;
+      item.querySelector('.layer-volume').textContent = volumeLabel(layer);
+      updateLayersTotal();
+    } else if (e.target.classList.contains('layer-density')) {
+      layer.density = e.target.value;
+      item.querySelector('.layer-volume').textContent = volumeLabel(layer);
+      updateLayersTotal();
+    }
+    saveState();
+  });
+
+  layersList.addEventListener('change', (e) => {
+    if (!e.target.classList.contains('layer-unit')) return;
+    const item = e.target.closest('.layer-item');
+    const layer = state.layers.find(l => l.id === Number(item.dataset.id));
+    if (!layer) return;
+    layer.unit = e.target.value;
+    item.querySelector('.layer-volume').textContent = volumeLabel(layer);
+    updateLayersTotal();
+    saveState();
+  });
+
+  layersList.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('layer-remove')) return;
+    const item = e.target.closest('.layer-item');
+    state.layers = state.layers.filter(l => l.id !== Number(item.dataset.id));
+    renderLayers();
+    saveState();
+  });
+
+  function volumeLabel(l) {
+    const vol = layerVolume(l);
+    if (!vol) return '—';
+    let label = `${vol.cuyd.toFixed(2)} yd³`;
+    if (vol.tons != null) label += ` · ${vol.tons.toFixed(1)}t`;
+    return label;
+  }
+
+  function renderLayers() {
+    layersCountEl.textContent = `${state.layers.length} layer${state.layers.length !== 1 ? 's' : ''}`;
+    if (state.layers.length === 0) {
+      layersList.innerHTML = '<div class="empty-state">Add a layer to calculate material volume</div>';
+      layersTotalEl.style.display = 'none';
+      return;
+    }
+    layersList.innerHTML = state.layers.map(l => `
+      <div class="layer-item" data-id="${l.id}">
+        <div class="layer-row1">
+          <input type="text" class="layer-material" placeholder="Material (e.g. D-1 base)" value="${escapeAttr(l.material)}" maxlength="40">
+          <button class="remove-btn layer-remove">×</button>
+        </div>
+        <div class="layer-row2">
+          <input type="number" class="layer-depth" placeholder="Depth" value="${l.depth ?? ''}" min="0" step="0.25" inputmode="decimal">
+          <select class="layer-unit">
+            <option value="in" ${l.unit === 'in' ? 'selected' : ''}>inches</option>
+            <option value="ft" ${l.unit === 'ft' ? 'selected' : ''}>feet</option>
+          </select>
+          <div class="layer-volume">${volumeLabel(l)}</div>
+        </div>
+        <div class="layer-row3">
+          <div class="layer-field">
+            <input type="number" class="layer-waste" placeholder="0" value="${l.wastePct ?? ''}" min="0" step="1" inputmode="decimal">
+            <span class="layer-field-suffix">% waste</span>
+          </div>
+          <div class="layer-field">
+            <input type="number" class="layer-density" placeholder="—" value="${l.density ?? ''}" min="0" step="0.05" inputmode="decimal">
+            <span class="layer-field-suffix">tons/yd³</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+    updateLayersTotal();
+  }
+
+  function updateLayersTotal() {
+    const vols = state.layers.map(layerVolume).filter(Boolean);
+    if (vols.length === 0) {
+      layersTotalEl.style.display = 'none';
+      return;
+    }
+    const totalCuYd = vols.reduce((s, v) => s + v.cuyd, 0);
+    const totalCuFt = vols.reduce((s, v) => s + v.cuft, 0);
+    const tonsVols = vols.filter(v => v.tons != null);
+    layersTotalEl.style.display = 'block';
+    let html = `Total: ${totalCuYd.toFixed(2)} yd³ &nbsp;(${Math.round(totalCuFt).toLocaleString()} ft³)`;
+    if (tonsVols.length) {
+      const totalTons = tonsVols.reduce((s, v) => s + v.tons, 0);
+      html += `<br>${totalTons.toFixed(1)} tons${tonsVols.length < vols.length ? ' <span style="font-weight:400;">(layers with density set)</span>' : ''}`;
+    }
+    layersTotalEl.innerHTML = html;
   }
 
   // ── CANVAS SHAPE PREVIEW ─────────────────────────────
@@ -878,7 +1166,11 @@
   }
 
   async function exportSnapshot() {
-    const W = 1080, H = 1350;
+    const validLayers = state.layers
+      .map(l => ({ ...l, vol: layerVolume(l) }))
+      .filter(l => l.vol);
+    const layersBlockH = validLayers.length ? 86 + validLayers.length * 42 : 0;
+    const W = 1080, H = 1350 + layersBlockH;
     const c = document.createElement('canvas');
     c.width = W;
     c.height = H;
@@ -959,8 +1251,52 @@
     g.stroke();
     drawShapeOn(g, state.pins, 70, cardTop + 30, W - 140, cardH - 60);
 
+    // materials needed (from Material Layers, if any)
+    let cursorY = cardTop + cardH + 50;
+    if (validLayers.length) {
+      g.textAlign = 'left';
+      g.fillStyle = '#1a1a1a';
+      g.font = `700 30px ${F}`;
+      g.fillText('Materials Needed', 40, cursorY);
+      cursorY += 36;
+
+      validLayers.forEach(l => {
+        const name = l.material.trim() || 'Layer';
+        const depthLabel = `${l.depth}${l.unit === 'in' ? '"' : ' ft'}`;
+        const wastePct = parseFloat(l.wastePct);
+        const wasteLabel = wastePct > 0 ? ` +${wastePct}% waste` : '';
+        const amountLabel = l.vol.tons != null
+          ? `${l.vol.cuyd.toFixed(2)} yd³ / ${l.vol.tons.toFixed(1)}t`
+          : `${l.vol.cuyd.toFixed(2)} yd³`;
+        g.fillStyle = '#555';
+        g.font = `400 26px ${F}`;
+        g.textAlign = 'left';
+        g.fillText(`${name} (${depthLabel}${wasteLabel})`, 40, cursorY);
+        g.fillStyle = '#2d6a2d';
+        g.font = `700 26px ${F}`;
+        g.textAlign = 'right';
+        g.fillText(amountLabel, W - 40, cursorY);
+        cursorY += 42;
+      });
+
+      const totalCuYd = validLayers.reduce((s, l) => s + l.vol.cuyd, 0);
+      const tonsLayers = validLayers.filter(l => l.vol.tons != null);
+      const totalTons = tonsLayers.reduce((s, l) => s + l.vol.tons, 0);
+      const totalLabel = tonsLayers.length
+        ? `${totalCuYd.toFixed(2)} yd³ / ${totalTons.toFixed(1)}t`
+        : `${totalCuYd.toFixed(2)} yd³`;
+      g.textAlign = 'left';
+      g.fillStyle = '#2d6a2d';
+      g.font = `800 28px ${F}`;
+      g.fillText('Total', 40, cursorY + 6);
+      g.textAlign = 'right';
+      g.fillText(totalLabel, W - 40, cursorY + 6);
+      g.textAlign = 'left';
+      cursorY += 50;
+    }
+
     // footer meta
-    const footY = cardTop + cardH + 50;
+    const footY = cursorY;
     const avgAcc = state.pins.reduce((s, p) => s + p.accuracy, 0) / state.pins.length;
     g.fillStyle = '#555';
     g.font = `400 24px ${F}`;
@@ -993,6 +1329,53 @@
     showToast('Snapshot saved');
   }
 
+  // ── PERSISTENCE ──────────────────────────────────────
+  // Field crews walk a property outdoors on a phone browser — a reload,
+  // backgrounding, or crash mid-job shouldn't lose the pins/layers already
+  // captured, so every mutation is autosaved to localStorage.
+  const STORAGE_KEY = 'yardMeasureState';
+
+  jobLabelInput.addEventListener('input', saveState);
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        pins: state.pins,
+        layers: state.layers,
+        nextLayerId: state.nextLayerId,
+        jobLabel: jobLabelInput.value,
+      }));
+    } catch (e) { /* storage unavailable or full — not fatal */ }
+  }
+
+  function clearSavedState() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+
+  function loadState() {
+    let saved;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      saved = JSON.parse(raw);
+    } catch (e) { return; }
+    if (!saved || !Array.isArray(saved.pins) || saved.pins.length === 0) return;
+
+    state.pins = saved.pins;
+    state.layers = Array.isArray(saved.layers) ? saved.layers : [];
+    state.nextLayerId = saved.nextLayerId || (state.layers.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1);
+    if (saved.jobLabel) jobLabelInput.value = saved.jobLabel;
+
+    renderPins();
+    calcBtn.disabled = state.pins.length < 3;
+    if (state.pins.length >= 3) {
+      calcAndDisplay();
+    } else {
+      renderLayers();
+    }
+    showToast('Restored your last job');
+  }
+
   // ── TOAST ────────────────────────────────────────────
   function showToast(msg) {
     const t = document.getElementById('toast');
@@ -1002,6 +1385,7 @@
   }
 
   // ── INIT ─────────────────────────────────────────────
+  loadState();
   startGPS();
   drawShape();
   window.addEventListener('resize', drawShape);
