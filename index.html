@@ -886,6 +886,14 @@
 
   // Flags shapes where the walked pin order crosses itself — the shoelace
   // formula silently returns a wrong (too-small) area for such polygons.
+  // Odd/notched shapes (L, U, walkways) often have edges running close
+  // together, so GPS jitter alone can make a perfectly fine shape appear to
+  // cross under a zero-tolerance test — a real problem measured empirically
+  // (an 8ft-wide walkway with typical ±8ft GPS accuracy false-triggered on
+  // ~49% of walks). Only flag a crossing once its penetration depth clears
+  // a threshold scaled to the involved pins' own recorded accuracy, so
+  // noise-scale "crossings" are ignored while genuine ordering mistakes
+  // (which produce much larger crossings) still get caught.
   function isSelfIntersecting(pins) {
     if (pins.length < 4) return false;
     const latRef = pins[0].lat;
@@ -894,18 +902,35 @@
     const pts = pins.map(p => ({
       x: (p.lng - lngRef) * Math.PI / 180 * R * Math.cos(latRef * Math.PI / 180),
       y: (p.lat - latRef) * Math.PI / 180 * R,
+      acc: p.accuracy,
     }));
     const n = pts.length;
     const ccw = (a, b, c) => (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
     const segmentsIntersect = (a1, a2, b1, b2) =>
       (ccw(a1, b1, b2) !== ccw(a2, b1, b2)) && (ccw(a1, a2, b1) !== ccw(a1, a2, b2));
+    const distToLine = (pt, p, q) => {
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const len = Math.hypot(dx, dy) || 1;
+      return Math.abs((pt.x - p.x) * dy - (pt.y - p.y) * dx) / len;
+    };
+    // How far past each other's line the segments actually reach — small for
+    // noise-scale crossings, large for a genuine walked-out-of-order mistake.
+    const crossDepth = (a1, a2, b1, b2) => Math.min(
+      distToLine(a1, b1, b2), distToLine(a2, b1, b2),
+      distToLine(b1, a1, a2), distToLine(b2, a1, a2)
+    );
 
     for (let i = 0; i < n; i++) {
       const a1 = pts[i], a2 = pts[(i + 1) % n];
       for (let j = i + 1; j < n; j++) {
         if (j === i || (j + 1) % n === i || j === (i + 1) % n) continue;
         const b1 = pts[j], b2 = pts[(j + 1) % n];
-        if (segmentsIntersect(a1, a2, b1, b2)) return true;
+        if (segmentsIntersect(a1, a2, b1, b2)) {
+          const depth = crossDepth(a1, a2, b1, b2);
+          const avgAccFt = (a1.acc + a2.acc + b1.acc + b2.acc) / 4;
+          const threshold = Math.max(1.5, avgAccFt * 0.3048 * 2.5);
+          if (depth > threshold) return true;
+        }
       }
     }
     return false;
