@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Yard Measure</title>
+<link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
+<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -460,17 +462,80 @@
 
   .btn-row .btn { flex: 1; }
 
-  /* CANVAS */
-  #canvas-wrap {
+  /* LIVE MAP */
+  #map-wrap {
     padding: 0 16px 8px;
   }
 
-  canvas {
-    width: 100%;
+  #map-search-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  #map-search-input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 2px solid #e0e0e0;
     border-radius: var(--radius);
-    background: white;
+    font-size: 14px;
+    font-family: inherit;
+    min-width: 0;
+  }
+
+  #map-search-input:focus {
+    outline: none;
+    border-color: var(--green-light);
+  }
+
+  #map-search-btn {
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0 16px;
+    font-size: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  #map-search-btn:active { opacity: 0.85; }
+
+  #tomtom-map {
+    width: 100%;
+    height: 220px;
+    border-radius: var(--radius);
+    background: #e8e8e6;
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    display: block;
+    overflow: hidden;
+  }
+
+  .map-pin-marker {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--green);
+    color: white;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .map-pin-marker.first {
+    background: var(--gold);
+  }
+
+  .map-you-marker {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #4285f4;
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px rgba(66,133,244,0.5), 0 1px 4px rgba(0,0,0,0.4);
   }
 
   /* GPS accuracy badge */
@@ -534,8 +599,12 @@
 </div>
 <div class="result-warning" id="result-warning">⚠️ Pins may be out of order — shape crosses itself, area could be wrong</div>
 
-<div id="canvas-wrap">
-  <canvas id="shape-canvas" height="140"></canvas>
+<div id="map-wrap">
+  <div id="map-search-bar">
+    <input type="text" id="map-search-input" placeholder="Search address or job site…">
+    <button id="map-search-btn" type="button">🔍</button>
+  </div>
+  <div id="tomtom-map"></div>
 </div>
 
 <div id="points-section">
@@ -608,8 +677,6 @@
   const resultExtra = document.getElementById('result-extra');
   const pointsList = document.getElementById('points-list');
   const pinCountEl = document.getElementById('pin-count');
-  const canvas = document.getElementById('shape-canvas');
-  const ctx = canvas.getContext('2d');
   const snapshotBtn = document.getElementById('snapshot-btn');
   const jobLabelInput = document.getElementById('job-label');
   const layersSection = document.getElementById('layers-section');
@@ -649,6 +716,7 @@
 
     renderGpsStatus();
     pinBtn.disabled = false;
+    updateYouAreHere(pos.coords.latitude, pos.coords.longitude);
   }
 
   function renderGpsStatus() {
@@ -734,6 +802,7 @@
     calcBtn.disabled = state.pins.length < 3;
     showToast(`Pin ${state.pins.length} dropped (${fixes.length} fix${fixes.length !== 1 ? 'es' : ''} averaged)`);
     if (state.pins.length >= 3) autoCalc();
+    updateMapShape();
     saveState();
   });
 
@@ -760,7 +829,7 @@
     state.layers = [];
     layersSection.style.display = 'none';
     renderLayers();
-    drawShape();
+    updateMapShape();
     clearSavedState();
   });
 
@@ -777,8 +846,8 @@
       snapshotBtn.disabled = true;
       state.areaSqft = 0;
       layersSection.style.display = 'none';
-      drawShape();
     }
+    updateMapShape();
     saveState();
   }
 
@@ -861,7 +930,7 @@
     resultExtra.innerHTML = extras.join(' &nbsp;·&nbsp; ');
 
     snapshotBtn.disabled = false;
-    drawShape();
+    updateMapShape();
   }
 
   function calcPerimeter(pins) {
@@ -1072,56 +1141,114 @@
     layersTotalEl.innerHTML = html;
   }
 
-  // ── CANVAS SHAPE PREVIEW ─────────────────────────────
-  function drawShape() {
-    const W = canvas.offsetWidth * window.devicePixelRatio || 300;
-    const H = 140 * window.devicePixelRatio || 140;
-    canvas.width = W;
-    canvas.height = H;
-    ctx.clearRect(0, 0, W, H);
+  // ── LIVE MAP (TomTom) ────────────────────────────────
+  // Real satellite/street imagery under the walked perimeter, instead of
+  // the old abstract shape-only preview — so odd/notched shapes can be seen
+  // against the actual property while walking, not just as a floating outline.
+  // The map is a visual enhancement only: pin-dropping and area math must
+  // keep working even if the SDK fails to load (e.g. no signal on site).
+  const TOMTOM_API_KEY = 'Uj3etMIVUsO9ZO7Z1TeklWioWSkLs5tY';
+  let map = null;
+  let mapReady = false;
+  let youAreHereMarker = null;
+  let pinMarkers = [];
 
-    if (state.pins.length < 2) return;
+  function initMap() {
+    try {
+      tt.setProductInfo('Titan Alaska Yard Measure', '1.0');
+      map = tt.map({
+        key: TOMTOM_API_KEY,
+        container: 'tomtom-map',
+        center: [-149.9003, 61.2181], // Anchorage, until GPS/search moves it
+        zoom: 17,
+        style: 'https://api.tomtom.com/style/1/style/*?map=2/basic_street-satellite&poi=2/poi_dynamic-satellite&key=' + TOMTOM_API_KEY,
+      });
+      map.addControl(new tt.NavigationControl(), 'top-right');
+      map.on('load', () => {
+        mapReady = true;
+        map.addSource('yard-shape', {
+          type: 'geojson',
+          data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[]] } },
+        });
+        map.addLayer({ id: 'yard-shape-fill', type: 'fill', source: 'yard-shape', paint: { 'fill-color': '#2d6a2d', 'fill-opacity': 0.25 } });
+        map.addLayer({ id: 'yard-shape-line', type: 'line', source: 'yard-shape', paint: { 'line-color': '#2d6a2d', 'line-width': 3 } });
+        if (state.currentPos) updateYouAreHere(state.currentPos.lat, state.currentPos.lng);
+        updateMapShape();
+      });
+    } catch (e) {
+      const wrap = document.getElementById('map-wrap');
+      if (wrap) wrap.style.display = 'none';
+    }
+  }
 
-    const latRef = state.pins[0].lat;
-    const lngRef = state.pins[0].lng;
-    const R = 6371000;
-    const pts = state.pins.map(p => ({
-      x: (p.lng - lngRef) * Math.PI / 180 * R * Math.cos(latRef * Math.PI / 180),
-      y: -(p.lat - latRef) * Math.PI / 180 * R,
-    }));
-
-    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const pad = 16 * window.devicePixelRatio;
-    const scaleX = (W - pad*2) / (maxX - minX || 1);
-    const scaleY = (H - pad*2) / (maxY - minY || 1);
-    const scale = Math.min(scaleX, scaleY);
-
-    const toCanvas = p => ({
-      x: pad + (p.x - minX) * scale,
-      y: pad + (p.y - minY) * scale,
+  // Redraws pin markers + the walked polygon/line on the map from state.pins.
+  function updateMapShape() {
+    if (!mapReady) return;
+    pinMarkers.forEach(m => m.remove());
+    pinMarkers = state.pins.map((p, i) => {
+      const el = document.createElement('div');
+      el.className = 'map-pin-marker' + (i === 0 ? ' first' : '');
+      el.textContent = i + 1;
+      return new tt.Marker({ element: el, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(map);
     });
 
-    const cPts = pts.map(toCanvas);
+    const coords = state.pins.map(p => [p.lng, p.lat]);
+    let geometry;
+    if (coords.length >= 3) {
+      geometry = { type: 'Polygon', coordinates: [[...coords, coords[0]]] };
+    } else if (coords.length === 2) {
+      geometry = { type: 'LineString', coordinates: coords };
+    } else {
+      geometry = { type: 'Polygon', coordinates: [[]] };
+    }
+    const src = map.getSource('yard-shape');
+    if (src) src.setData({ type: 'Feature', geometry });
 
-    ctx.beginPath();
-    ctx.moveTo(cPts[0].x, cPts[0].y);
-    cPts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(45,106,45,0.12)';
-    ctx.fill();
-    ctx.strokeStyle = '#2d6a2d';
-    ctx.lineWidth = 2 * window.devicePixelRatio;
-    ctx.stroke();
+    // Keep the whole walked shape in view as pins are added.
+    if (coords.length >= 2) {
+      const lats = state.pins.map(p => p.lat), lngs = state.pins.map(p => p.lng);
+      const bounds = new tt.LngLatBounds([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]);
+      map.fitBounds(bounds, { padding: 60, maxZoom: 21, duration: 400 });
+    }
+  }
 
-    // dots
-    cPts.forEach((p, i) => {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 5 * window.devicePixelRatio, 0, Math.PI*2);
-      ctx.fillStyle = i === 0 ? '#c8a84b' : '#2d6a2d';
-      ctx.fill();
-    });
+  // Live "you are here" marker, updated on every GPS fix. Centers the map
+  // once on the first fix only — after that, walking/search moves the view.
+  function updateYouAreHere(lat, lng) {
+    if (!mapReady) return;
+    if (!youAreHereMarker) {
+      const el = document.createElement('div');
+      el.className = 'map-you-marker';
+      youAreHereMarker = new tt.Marker({ element: el, anchor: 'center' }).setLngLat([lng, lat]).addTo(map);
+      if (state.pins.length === 0) map.setCenter([lng, lat]);
+    } else {
+      youAreHereMarker.setLngLat([lng, lat]);
+    }
+  }
+
+  // ── ADDRESS SEARCH ───────────────────────────────────
+  // Lets a crew jump the map to a job site before walking, independent of
+  // live GPS — useful for orienting before you're actually standing there.
+  document.getElementById('map-search-btn').addEventListener('click', doMapSearch);
+  document.getElementById('map-search-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doMapSearch();
+  });
+
+  async function doMapSearch() {
+    const input = document.getElementById('map-search-input');
+    const q = input.value.trim();
+    if (!q || !mapReady) return;
+    try {
+      const res = await fetch(`https://api.tomtom.com/search/2/geocode/${encodeURIComponent(q)}.json?key=${TOMTOM_API_KEY}&limit=1`);
+      const data = await res.json();
+      const hit = data.results && data.results[0];
+      if (!hit) { showToast('No results found'); return; }
+      map.flyTo({ center: [hit.position.lon, hit.position.lat], zoom: 18 });
+      showToast(`Jumped to ${(hit.address && hit.address.freeformAddress) || q}`);
+      input.blur();
+    } catch (e) {
+      showToast('Search failed — check connection');
+    }
   }
 
   // ── SNAPSHOT EXPORT ──────────────────────────────────
@@ -1412,8 +1539,7 @@
   // ── INIT ─────────────────────────────────────────────
   loadState();
   startGPS();
-  drawShape();
-  window.addEventListener('resize', drawShape);
+  initMap();
 </script>
 </body>
 </html>
