@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Yard Measure</title>
-<link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
-<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -140,6 +140,19 @@
     font-weight: 700;
   }
 
+  .result-total {
+    display: none;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.2);
+    font-size: 14px;
+  }
+
+  .result-total b {
+    color: var(--gold);
+    font-size: 17px;
+  }
+
   .result-warning {
     display: none;
     background: #fce4e4;
@@ -150,11 +163,7 @@
     padding: 8px 16px;
   }
 
-  /* POINTS LIST */
-  #points-section {
-    padding: 16px 16px 0;
-  }
-
+  /* SECTION CHROME */
   .section-header {
     display: flex;
     justify-content: space-between;
@@ -179,21 +188,96 @@
     font-weight: 700;
   }
 
+  .empty-state {
+    text-align: center;
+    padding: 20px;
+    color: #bbb;
+    font-size: 13px;
+    background: white;
+    border-radius: 8px;
+  }
+
+  /* ZONES */
+  #zones-section {
+    padding: 14px 16px 0;
+  }
+
+  #zone-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .zone-chip {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 20px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--mid);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .zone-chip.active {
+    border-color: var(--green);
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  .zone-chip .zone-area {
+    font-size: 11px;
+    opacity: 0.75;
+    font-weight: 400;
+  }
+
+  .zone-chip .chip-act {
+    border: none;
+    background: none;
+    font-size: 13px;
+    line-height: 1;
+    padding: 2px;
+    color: inherit;
+    opacity: 0.55;
+    cursor: pointer;
+  }
+
+  .zone-chip.add {
+    border-style: dashed;
+    font-weight: 700;
+    color: var(--green);
+    border-color: var(--green-light);
+  }
+
+  /* POINTS LIST */
+  #points-section {
+    padding: 16px 16px 0;
+  }
+
   #points-list {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 200px;
+    max-height: 240px;
     overflow-y: auto;
   }
 
   .point-item {
     background: white;
     border-radius: 8px;
-    padding: 10px 14px;
+    padding: 8px 10px 8px 12px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     animation: slideIn 0.2s ease;
   }
@@ -207,6 +291,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
   }
 
   .point-number {
@@ -234,6 +319,30 @@
     color: #999;
   }
 
+  .point-actions {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    flex-shrink: 0;
+  }
+
+  .point-actions button {
+    background: none;
+    border: none;
+    color: #b0b0b0;
+    font-size: 15px;
+    cursor: pointer;
+    width: 34px;
+    height: 40px;
+    line-height: 1;
+    border-radius: 6px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .point-actions button:disabled { opacity: 0.25; }
+  .point-actions button:active { background: #f0f0f0; color: var(--green); }
+  .point-actions button.act-remove:active { color: var(--red); }
+
   .remove-btn {
     background: none;
     border: none;
@@ -247,15 +356,6 @@
   }
 
   .remove-btn:active { color: var(--red); }
-
-  .empty-state {
-    text-align: center;
-    padding: 20px;
-    color: #bbb;
-    font-size: 13px;
-    background: white;
-    border-radius: 8px;
-  }
 
   /* LAYERS */
   #layers-section {
@@ -381,7 +481,7 @@
 
   /* SNAPSHOT */
   #snapshot-section {
-    padding: 4px 16px 0;
+    padding: 16px 16px 0;
   }
 
   #job-label {
@@ -460,7 +560,7 @@
     gap: 10px;
   }
 
-  .btn-row .btn { flex: 1; }
+  .btn-row .btn { flex: 1; font-size: 14px; padding: 14px; }
 
   /* LIVE MAP */
   #map-wrap {
@@ -501,18 +601,79 @@
 
   #map-search-btn:active { opacity: 0.85; }
 
-  #tomtom-map {
+  #map-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  #tap-mode-btn, #parcel-btn {
+    background: white;
+    border: 2px solid #e0e0e0;
+    color: var(--mid);
+    border-radius: 20px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #tap-mode-btn.on, #parcel-btn.on {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+  }
+
+  #imagery-select {
+    margin-left: auto;
+    border: 2px solid #e0e0e0;
+    border-radius: 20px;
+    padding: 8px 6px;
+    font-size: 12px;
+    font-family: inherit;
+    background: white;
+    color: var(--mid);
+    max-width: 42%;
+  }
+
+  .map-hint {
+    font-size: 11.5px;
+    color: #999;
+    line-height: 1.3;
+    margin-bottom: 8px;
+  }
+
+  .map-credit {
+    font-size: 10px;
+    color: #aaa;
+    margin-top: 4px;
+    line-height: 1.3;
+  }
+
+  #yard-map {
     width: 100%;
-    height: 220px;
+    height: 300px;
     border-radius: var(--radius);
     background: #e8e8e6;
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
     overflow: hidden;
   }
 
+  #yard-map.tap-armed {
+    box-shadow: 0 0 0 3px var(--green-light);
+    cursor: crosshair;
+  }
+
+  /* MapLibre paints its own attribution block; ours lives under the map. */
+  .maplibregl-ctrl-attrib { display: none !important; }
+
   .map-pin-marker {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: var(--green);
     color: white;
@@ -521,8 +682,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
+    cursor: grab;
   }
 
   .map-pin-marker.first {
@@ -581,7 +743,7 @@
   <div class="logo">📐</div>
   <div class="header-text">
     <h1>Yard Measure</h1>
-    <p>Walk the perimeter · Drop pins · Get area</p>
+    <p>Walk it or tap the map · Get area</p>
   </div>
 </header>
 
@@ -591,11 +753,12 @@
 </div>
 
 <div id="result-area">
-  <div class="result-label">Estimated Area</div>
+  <div class="result-label" id="result-label">Estimated Area</div>
   <div class="result-number" id="result-sqft">—</div>
   <div class="result-unit">square feet</div>
   <div class="result-range" id="result-range"></div>
   <div class="result-secondary" id="result-extra"></div>
+  <div class="result-total" id="result-total"></div>
 </div>
 <div class="result-warning" id="result-warning">⚠️ Pins may be out of order — shape crosses itself, area could be wrong</div>
 
@@ -604,7 +767,22 @@
     <input type="text" id="map-search-input" placeholder="Search address or job site…">
     <button id="map-search-btn" type="button">🔍</button>
   </div>
-  <div id="tomtom-map"></div>
+  <div id="map-toolbar">
+    <button id="tap-mode-btn" type="button">👆 Tap to add</button>
+    <button id="parcel-btn" type="button">▦ Lot lines</button>
+    <select id="imagery-select" title="Aerial imagery source"></select>
+  </div>
+  <div class="map-hint" id="map-hint">Drag any numbered pin to nudge a corner.</div>
+  <div id="yard-map"></div>
+  <div class="map-credit" id="map-credit"></div>
+</div>
+
+<div id="zones-section">
+  <div class="section-header">
+    <span class="section-title">Zones</span>
+    <span class="pin-count" id="zone-count">1 zone</span>
+  </div>
+  <div id="zone-tabs"></div>
 </div>
 
 <div id="points-section">
@@ -636,11 +814,11 @@
     <span>📍</span> Drop Pin Here
   </button>
   <div class="btn-row">
-    <button class="btn btn-secondary" id="calc-btn" disabled>
-      Calculate Area
+    <button class="btn btn-secondary" id="undo-btn" disabled>
+      ↩ Undo Pin
     </button>
     <button class="btn btn-danger" id="clear-btn">
-      🗑 Clear
+      🗑 Clear Zone
     </button>
   </div>
   <button class="btn btn-secondary" id="snapshot-btn" disabled>
@@ -651,32 +829,49 @@
 <div id="toast"></div>
 
 <script>
+  // A job is a list of zones (front bed, back lawn, gravel pad…). Each zone
+  // owns its own corner pins and material layers; the snapshot reports every
+  // zone plus a job total.
   const state = {
-    pins: [],
-    watching: false,
+    zones: [],
+    activeZoneId: null,
+    nextZoneId: 1,
+    nextPinId: 1,
+    // GPS
     currentPos: null,
-    currentAccuracy: null,
+    currentAccuracy: null, // METERS, as the Geolocation spec defines it
     lastFixTime: null,
-    recentFixes: [], // rolling buffer of {lat, lng, accuracy, t} for averaging
+    recentFixes: [],
     stale: false,
-    layers: [], // {id, material, depth, unit}
-    nextLayerId: 1,
-    areaSqft: 0,
+    tapMode: false,
   };
 
   const STALE_MS = 6000;
   const AVERAGE_WINDOW_MS = 4000;
-  const POOR_ACCURACY_FT = 25;
+  const POOR_ACCURACY_FT = 30;
+  const M_TO_FT = 3.28084;
+  // navigator.geolocation reports `accuracy` as a 95%-confidence radius, so a
+  // 1-sigma position error is roughly accuracy / 1.96.
+  const ACC_TO_SIGMA = 1 / 1.96;
+  // Floor on how well a corner can be placed by tapping orthoimagery — the
+  // imagery's own georegistration error, independent of how far you zoom in.
+  const IMAGERY_FLOOR_M = 1.5;
 
   const pinBtn = document.getElementById('pin-btn');
-  const calcBtn = document.getElementById('calc-btn');
+  const undoBtn = document.getElementById('undo-btn');
   const clearBtn = document.getElementById('clear-btn');
   const gpsDot = document.getElementById('gps-dot');
   const gpsStatus = document.getElementById('gps-status');
+  const resultLabel = document.getElementById('result-label');
   const resultSqft = document.getElementById('result-sqft');
   const resultExtra = document.getElementById('result-extra');
+  const resultRange = document.getElementById('result-range');
+  const resultTotal = document.getElementById('result-total');
+  const resultWarning = document.getElementById('result-warning');
   const pointsList = document.getElementById('points-list');
   const pinCountEl = document.getElementById('pin-count');
+  const zoneTabs = document.getElementById('zone-tabs');
+  const zoneCountEl = document.getElementById('zone-count');
   const snapshotBtn = document.getElementById('snapshot-btn');
   const jobLabelInput = document.getElementById('job-label');
   const layersSection = document.getElementById('layers-section');
@@ -684,11 +879,100 @@
   const layersCountEl = document.getElementById('layers-count');
   const layersTotalEl = document.getElementById('layers-total');
   const addLayerBtn = document.getElementById('add-layer-btn');
+  const tapModeBtn = document.getElementById('tap-mode-btn');
+  const mapHint = document.getElementById('map-hint');
+  const mapEl = document.getElementById('yard-map');
+  const parcelBtn = document.getElementById('parcel-btn');
+  const imagerySelect = document.getElementById('imagery-select');
+
+  // ── ZONES ────────────────────────────────────────────
+  function newZone(name) {
+    const z = {
+      id: state.nextZoneId++,
+      name: name || `Zone ${state.nextZoneId - 1}`,
+      pins: [],
+      layers: [],
+      nextLayerId: 1,
+    };
+    state.zones.push(z);
+    return z;
+  }
+
+  function activeZone() {
+    return state.zones.find(z => z.id === state.activeZoneId) || state.zones[0];
+  }
+
+  function ensureZone() {
+    if (state.zones.length === 0) state.activeZoneId = newZone('Zone 1').id;
+    if (!state.zones.some(z => z.id === state.activeZoneId)) state.activeZoneId = state.zones[0].id;
+  }
+
+  function zoneSqft(z) {
+    return calcAreaSqm(z.pins) * 10.7639;
+  }
+
+  function jobSqft() {
+    return state.zones.reduce((s, z) => s + zoneSqft(z), 0);
+  }
+
+  function renderZoneTabs() {
+    const n = state.zones.length;
+    zoneCountEl.textContent = `${n} zone${n !== 1 ? 's' : ''}`;
+    const chips = state.zones.map(z => {
+      const active = z.id === state.activeZoneId;
+      const sqft = zoneSqft(z);
+      const area = sqft > 0 ? `${Math.round(sqft).toLocaleString()} ft²` : `${z.pins.length} pin${z.pins.length !== 1 ? 's' : ''}`;
+      const acts = active
+        ? `<button class="chip-act" data-act="rename" title="Rename">✏️</button>` +
+          (n > 1 ? `<button class="chip-act" data-act="delete" title="Delete zone">×</button>` : '')
+        : '';
+      return `<button class="zone-chip ${active ? 'active' : ''}" data-zone="${z.id}">
+        <span>${escapeHtml(z.name)}</span><span class="zone-area">${area}</span>${acts}
+      </button>`;
+    }).join('');
+    zoneTabs.innerHTML = chips + `<button class="zone-chip add" data-act="add">+ Zone</button>`;
+  }
+
+  zoneTabs.addEventListener('click', (e) => {
+    const actBtn = e.target.closest('[data-act]');
+    const chip = e.target.closest('.zone-chip');
+    if (!chip) return;
+    const act = actBtn && actBtn.dataset.act;
+
+    if (act === 'add') {
+      state.activeZoneId = newZone().id;
+      if (state.tapMode) showToast('New zone — tap the map to outline it');
+      renderAll();
+      saveState();
+      return;
+    }
+    const zone = state.zones.find(z => z.id === Number(chip.dataset.zone));
+    if (!zone) return;
+
+    if (act === 'rename') {
+      const name = prompt('Zone name', zone.name);
+      if (name && name.trim()) zone.name = name.trim().slice(0, 30);
+      renderAll();
+      saveState();
+      return;
+    }
+    if (act === 'delete') {
+      if (!confirm(`Delete "${zone.name}" and its pins?`)) return;
+      state.zones = state.zones.filter(z => z.id !== zone.id);
+      ensureZone();
+      renderAll({ fit: true });
+      saveState();
+      return;
+    }
+    state.activeZoneId = zone.id;
+    renderAll({ fit: true });
+    saveState();
+  });
 
   // ── GPS ──────────────────────────────────────────────
   function startGPS() {
     if (!navigator.geolocation) {
-      setStatus('GPS not available on this device', 'red');
+      setStatus('GPS not available — use "Tap to add" on the map instead', 'red');
       return;
     }
     setStatus('Requesting GPS…', 'yellow');
@@ -715,26 +999,29 @@
     state.recentFixes = state.recentFixes.filter(f => now - f.t < AVERAGE_WINDOW_MS);
 
     renderGpsStatus();
-    pinBtn.disabled = false;
+    updateButtons();
     updateYouAreHere(pos.coords.latitude, pos.coords.longitude);
   }
 
+  // Accuracy arrives in metres; crews think in feet, so convert once here
+  // rather than quietly relabelling metres as feet.
   function renderGpsStatus() {
-    const acc = state.currentAccuracy;
-    if (acc == null) return;
-    const cls = acc < 5 ? 'acc-good' : acc < 15 ? 'acc-ok' : 'acc-poor';
-    const label = acc < 5 ? 'Excellent' : acc < 15 ? 'Good' : 'Low';
+    const accM = state.currentAccuracy;
+    if (accM == null) return;
+    const ft = accM * M_TO_FT;
+    const cls = ft < 10 ? 'acc-good' : ft < 25 ? 'acc-ok' : 'acc-poor';
+    const label = ft < 10 ? 'Excellent' : ft < 25 ? 'Good' : 'Low';
     setStatus(
-      `GPS locked · <span class="accuracy-badge ${cls}">±${Math.round(acc)}ft accuracy – ${label}</span>`,
+      `GPS locked · <span class="accuracy-badge ${cls}">±${Math.round(ft)} ft – ${label}</span>`,
       'green'
     );
   }
 
   function onError(err) {
     const msgs = {
-      1: 'Location access denied. Tap the 🔒 icon in your browser to allow.',
-      2: 'GPS signal unavailable. Try moving outside.',
-      3: 'GPS timed out. Check signal and reload.',
+      1: 'Location denied — you can still tap the map to place corners.',
+      2: 'GPS signal unavailable. Try moving outside, or tap the map.',
+      3: 'GPS timed out. Check signal, or tap the map to place corners.',
     };
     setStatus(msgs[err.code] || 'GPS error', 'red');
     gpsDot.className = 'status-dot red';
@@ -752,7 +1039,7 @@
     if (Date.now() - state.lastFixTime > STALE_MS) {
       state.stale = true;
       setStatus('GPS signal stale — waiting for update…', 'yellow');
-      pinBtn.disabled = true;
+      updateButtons();
     }
   }, 1000);
 
@@ -777,6 +1064,15 @@
     return { lat: slat / sw, lng: slng / sw, accuracy };
   }
 
+  function addPin(pin, opts) {
+    const z = activeZone();
+    pin.id = state.nextPinId++;
+    if (opts && Number.isInteger(opts.index)) z.pins.splice(opts.index, 0, pin);
+    else z.pins.push(pin);
+    renderAll({ fit: !!(opts && opts.fit) });
+    saveState();
+  }
+
   pinBtn.addEventListener('click', () => {
     if (!state.currentPos || state.stale) return;
 
@@ -784,105 +1080,119 @@
       lat: state.currentPos.lat, lng: state.currentPos.lng, accuracy: state.currentAccuracy,
     }];
     const avg = weightedAverage(fixes);
+    const accFt = avg.accuracy * M_TO_FT;
 
-    if (avg.accuracy > POOR_ACCURACY_FT) {
-      const ok = confirm(`GPS accuracy is low (±${Math.round(avg.accuracy)} ft). This pin may throw off the area a lot. Drop it anyway?`);
+    if (accFt > POOR_ACCURACY_FT) {
+      const ok = confirm(`GPS accuracy is low (±${Math.round(accFt)} ft). This pin may throw off the area a lot. Drop it anyway?`);
       if (!ok) return;
     }
 
-    const pin = {
-      lat: avg.lat,
-      lng: avg.lng,
-      accuracy: avg.accuracy,
-      samples: fixes.length,
-      id: Date.now(),
-    };
-    state.pins.push(pin);
-    renderPins();
-    calcBtn.disabled = state.pins.length < 3;
-    showToast(`Pin ${state.pins.length} dropped (${fixes.length} fix${fixes.length !== 1 ? 'es' : ''} averaged)`);
-    if (state.pins.length >= 3) autoCalc();
-    updateMapShape();
-    saveState();
+    addPin({ lat: avg.lat, lng: avg.lng, accuracy: avg.accuracy, samples: fixes.length, src: 'gps' }, { fit: true });
+    showToast(`Pin ${activeZone().pins.length} dropped (${fixes.length} fix${fixes.length !== 1 ? 'es' : ''} averaged)`);
   });
 
-  calcBtn.addEventListener('click', () => {
-    if (state.pins.length < 3) {
-      showToast('Need at least 3 pins to calculate');
-      return;
-    }
-    calcAndDisplay();
+  // Removes the most recently *added* pin, which is not necessarily the last
+  // one in the list — inserting a midpoint puts a brand-new pin in the middle.
+  // Pin ids increment monotonically, so the highest id is always the newest.
+  undoBtn.addEventListener('click', () => {
+    const z = activeZone();
+    if (!z.pins.length) return;
+    let newest = 0;
+    z.pins.forEach((p, i) => { if (p.id > z.pins[newest].id) newest = i; });
+    z.pins.splice(newest, 1);
+    renderAll();
+    saveState();
+    showToast('Last pin removed');
   });
 
   clearBtn.addEventListener('click', () => {
-    if (state.pins.length === 0) return;
-    if (!confirm('Clear all pins?')) return;
-    state.pins = [];
-    renderPins();
-    resultSqft.textContent = '—';
-    resultExtra.innerHTML = '';
-    document.getElementById('result-range').innerHTML = '';
-    document.getElementById('result-warning').style.display = 'none';
-    calcBtn.disabled = true;
-    snapshotBtn.disabled = true;
-    state.areaSqft = 0;
-    state.layers = [];
-    layersSection.style.display = 'none';
-    renderLayers();
-    updateMapShape();
-    clearSavedState();
+    const z = activeZone();
+    if (z.pins.length === 0 && z.layers.length === 0) return;
+    if (!confirm(`Clear all pins and layers in "${z.name}"?`)) return;
+    z.pins = [];
+    z.layers = [];
+    renderAll();
+    saveState();
   });
 
-  function removePin(id) {
-    state.pins = state.pins.filter(p => p.id !== id);
-    renderPins();
-    calcBtn.disabled = state.pins.length < 3;
-    if (state.pins.length >= 3) autoCalc();
-    else {
-      resultSqft.textContent = '—';
-      resultExtra.innerHTML = '';
-      document.getElementById('result-range').innerHTML = '';
-      document.getElementById('result-warning').style.display = 'none';
-      snapshotBtn.disabled = true;
-      state.areaSqft = 0;
-      layersSection.style.display = 'none';
-    }
-    updateMapShape();
-    saveState();
-  }
+  // Row actions: reorder, insert a midpoint, delete. Reordering is how a
+  // crossed shape gets fixed — the map redraws live so the right order is
+  // obvious. Arrows rather than drag-and-drop: far more reliable one-handed
+  // on a phone, in gloves, in the rain.
+  pointsList.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const z = activeZone();
+    const i = Number(btn.closest('.point-item').dataset.index);
+    const act = btn.dataset.act;
 
-  function renderPins() {
-    pinCountEl.textContent = `${state.pins.length} pin${state.pins.length !== 1 ? 's' : ''}`;
-    if (state.pins.length === 0) {
-      pointsList.innerHTML = '<div class="empty-state">Walk to a corner and tap "Drop Pin"</div>';
+    if (act === 'up' && i > 0) {
+      [z.pins[i - 1], z.pins[i]] = [z.pins[i], z.pins[i - 1]];
+    } else if (act === 'down' && i < z.pins.length - 1) {
+      [z.pins[i + 1], z.pins[i]] = [z.pins[i], z.pins[i + 1]];
+    } else if (act === 'insert') {
+      const a = z.pins[i], b = z.pins[(i + 1) % z.pins.length];
+      addPin({
+        lat: (a.lat + b.lat) / 2,
+        lng: (a.lng + b.lng) / 2,
+        accuracy: Math.max(a.accuracy, b.accuracy, IMAGERY_FLOOR_M),
+        src: 'map',
+      }, { index: i + 1 });
+      showToast('Point added on that edge — drag it on the map');
+      return;
+    } else if (act === 'remove') {
+      z.pins.splice(i, 1);
+    } else {
       return;
     }
-    pointsList.innerHTML = state.pins.map((p, i) => `
-      <div class="point-item">
+    renderAll();
+    saveState();
+  });
+
+  function renderPins() {
+    const z = activeZone();
+    const pins = z.pins;
+    pinCountEl.textContent = `${pins.length} pin${pins.length !== 1 ? 's' : ''}`;
+    if (pins.length === 0) {
+      pointsList.innerHTML = '<div class="empty-state">Walk a corner and tap "Drop Pin", or turn on "Tap to add" and tap corners on the map</div>';
+      return;
+    }
+    pointsList.innerHTML = pins.map((p, i) => `
+      <div class="point-item" data-index="${i}">
         <div class="point-info">
           <div class="point-number">${i + 1}</div>
           <div>
             <div class="point-coords">${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}</div>
-            <div class="point-accuracy">±${Math.round(p.accuracy)} ft${p.samples > 1 ? ` · ${p.samples} fixes avg` : ''}</div>
+            <div class="point-accuracy">±${Math.round(p.accuracy * M_TO_FT)} ft · ${p.src === 'map' ? 'map pin' : `GPS${p.samples > 1 ? `, ${p.samples} fixes avg` : ''}`}</div>
           </div>
         </div>
-        <button class="remove-btn" onclick="removePin(${p.id})">×</button>
+        <div class="point-actions">
+          <button data-act="up" title="Move earlier" ${i === 0 ? 'disabled' : ''}>▲</button>
+          <button data-act="down" title="Move later" ${i === pins.length - 1 ? 'disabled' : ''}>▼</button>
+          <button data-act="insert" title="Add a point on the next edge" ${pins.length < 2 ? 'disabled' : ''}>＋</button>
+          <button data-act="remove" class="act-remove" title="Delete">×</button>
+        </div>
       </div>
     `).join('');
   }
 
   // ── MATH ─────────────────────────────────────────────
-  // Shoelace formula on projected coords
-  function calcArea(pins) {
-    if (pins.length < 3) return 0;
-    // Project to meters using equirectangular
-    const latRef = pins[0].lat;
-    const lngRef = pins[0].lng;
-    const R = 6371000; // earth radius in meters
-    const pts = pins.map(p => ({
+  // Local equirectangular projection to metres, anchored on the first pin.
+  function project(pins) {
+    if (!pins.length) return [];
+    const latRef = pins[0].lat, lngRef = pins[0].lng;
+    const R = 6371000;
+    return pins.map(p => ({
       x: (p.lng - lngRef) * Math.PI / 180 * R * Math.cos(latRef * Math.PI / 180),
       y: (p.lat - latRef) * Math.PI / 180 * R,
+      acc: p.accuracy,
     }));
+  }
+
+  // Shoelace formula on projected coords → square metres.
+  function calcAreaSqm(pins) {
+    if (pins.length < 3) return 0;
+    const pts = project(pins);
     let area = 0;
     const n = pts.length;
     for (let i = 0; i < n; i++) {
@@ -890,89 +1200,98 @@
       area += pts[i].x * pts[j].y;
       area -= pts[j].x * pts[i].y;
     }
-    return Math.abs(area / 2); // square meters
+    return Math.abs(area / 2);
   }
 
-  function autoCalc() { calcAndDisplay(); }
-
-  function calcAndDisplay() {
-    const sqm = calcArea(state.pins);
-    const sqft = sqm * 10.7639;
-    const sqyd = sqm * 1.19599;
-    const acres = sqm / 4046.86;
-
-    resultSqft.textContent = Math.round(sqft).toLocaleString();
-    state.areaSqft = sqft;
-    layersSection.style.display = 'block';
-    renderLayers();
-
-    // Accuracy range: estimate perimeter error using avg pin accuracy
-    // Each pin contributes its accuracy to adjacent edge lengths
-    // Simple bound: error ≈ avgAccuracy * perimeter / area * sqft (fraction of area)
-    // Practical approach: treat each pin as having ±acc error, estimate area band
-    const avgAccFt = state.pins.reduce((s, p) => s + p.accuracy, 0) / state.pins.length;
-    const perimeterM = calcPerimeter(state.pins);
-    const perimeterFt = perimeterM * 3.28084;
-    // Area error ≈ perimeter × avg position error (in same units)
-    const errorSqft = Math.round(perimeterFt * avgAccFt);
-    const low = Math.max(0, Math.round(sqft) - errorSqft);
-    const high = Math.round(sqft) + errorSqft;
-
-    const rangeEl = document.getElementById('result-range');
-    rangeEl.innerHTML = `Range: <span>${low.toLocaleString()}</span> – <span>${high.toLocaleString()}</span> sq ft`;
-
-    const warnEl = document.getElementById('result-warning');
-    warnEl.style.display = isSelfIntersecting(state.pins) ? 'block' : 'none';
-
-    let extras = [];
-    if (acres >= 0.1) extras.push(`${acres.toFixed(2)} acres`);
-    extras.push(`${Math.round(sqyd).toLocaleString()} sq yd`);
-    resultExtra.innerHTML = extras.join(' &nbsp;·&nbsp; ');
-
-    snapshotBtn.disabled = false;
-    updateMapShape();
-  }
-
-  function calcPerimeter(pins) {
+  function calcPerimeterM(pins) {
     if (pins.length < 2) return 0;
-    const latRef = pins[0].lat;
-    const lngRef = pins[0].lng;
-    const R = 6371000;
-    const pts = pins.map(p => ({
-      x: (p.lng - lngRef) * Math.PI / 180 * R * Math.cos(latRef * Math.PI / 180),
-      y: (p.lat - latRef) * Math.PI / 180 * R,
-    }));
+    const pts = project(pins);
     let perim = 0;
     const n = pts.length;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
-      const dx = pts[j].x - pts[i].x;
-      const dy = pts[j].y - pts[i].y;
-      perim += Math.sqrt(dx*dx + dy*dy);
+      perim += Math.hypot(pts[j].x - pts[i].x, pts[j].y - pts[i].y);
     }
     return perim;
   }
 
-  // Flags shapes where the walked pin order crosses itself — the shoelace
-  // formula silently returns a wrong (too-small) area for such polygons.
+  // First-order error propagation through the shoelace formula.
+  // dA/dx_i = (y_{i+1} - y_{i-1})/2 and dA/dy_i = (x_{i-1} - x_{i+1})/2, so a
+  // corner's influence on the area scales with the span between its two
+  // NEIGHBOURS — not with the whole perimeter, which the old estimate used and
+  // which badly overstated the band on many-cornered shapes.
+  // Errors are treated as independent because a common-mode GPS shift slides
+  // the whole polygon without changing its area at all.
+  function areaSigmaSqm(pins) {
+    if (pins.length < 3) return 0;
+    const pts = project(pins);
+    const n = pts.length;
+    let variance = 0;
+    for (let i = 0; i < n; i++) {
+      const prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
+      const dAdx = (next.y - prev.y) / 2;
+      const dAdy = (prev.x - next.x) / 2;
+      const sigma = pts[i].acc * ACC_TO_SIGMA;
+      variance += sigma * sigma * (dAdx * dAdx + dAdy * dAdy);
+    }
+    return Math.sqrt(variance);
+  }
+
+  function renderResult() {
+    const z = activeZone();
+    const sqm = calcAreaSqm(z.pins);
+    const sqft = sqm * 10.7639;
+    const multi = state.zones.length > 1;
+
+    resultLabel.textContent = multi ? `${z.name} — Estimated Area` : 'Estimated Area';
+
+    if (z.pins.length < 3) {
+      resultSqft.textContent = '—';
+      resultRange.innerHTML = '';
+      resultExtra.innerHTML = '';
+      resultWarning.style.display = 'none';
+      layersSection.style.display = 'none';
+    } else {
+      resultSqft.textContent = Math.round(sqft).toLocaleString();
+
+      // Reported as a ~95% band: two sigma of the propagated area error.
+      const bandSqft = 2 * areaSigmaSqm(z.pins) * 10.7639;
+      const low = Math.max(0, Math.round(sqft - bandSqft));
+      const high = Math.round(sqft + bandSqft);
+      resultRange.innerHTML = `Range: <span>${low.toLocaleString()}</span> – <span>${high.toLocaleString()}</span> sq ft`;
+
+      const extras = [];
+      const acres = sqm / 4046.86;
+      if (acres >= 0.1) extras.push(`${acres.toFixed(2)} acres`);
+      extras.push(`${Math.round(sqm * 1.19599).toLocaleString()} sq yd`);
+      extras.push(`${Math.round(calcPerimeterM(z.pins) * M_TO_FT).toLocaleString()} ft perimeter`);
+      resultExtra.innerHTML = extras.join(' &nbsp;·&nbsp; ');
+
+      resultWarning.style.display = isSelfIntersecting(z.pins) ? 'block' : 'none';
+      layersSection.style.display = 'block';
+    }
+
+    if (multi) {
+      const measured = state.zones.filter(x => x.pins.length >= 3).length;
+      resultTotal.style.display = 'block';
+      resultTotal.innerHTML = `Job total <b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> across ${measured} measured zone${measured !== 1 ? 's' : ''}`;
+    } else {
+      resultTotal.style.display = 'none';
+    }
+  }
+
+  // Flags shapes where the pin order crosses itself — the shoelace formula
+  // silently returns a wrong (too-small) area for such polygons.
   // Odd/notched shapes (L, U, walkways) often have edges running close
-  // together, so GPS jitter alone can make a perfectly fine shape appear to
-  // cross under a zero-tolerance test — a real problem measured empirically
-  // (an 8ft-wide walkway with typical ±8ft GPS accuracy false-triggered on
-  // ~49% of walks). Only flag a crossing once its penetration depth clears
-  // a threshold scaled to the involved pins' own recorded accuracy, so
-  // noise-scale "crossings" are ignored while genuine ordering mistakes
-  // (which produce much larger crossings) still get caught.
+  // together, so position noise alone can make a perfectly fine shape appear
+  // to cross under a zero-tolerance test. Only flag a crossing once its
+  // penetration depth clears a threshold scaled to the involved pins' own
+  // accuracy. NOTE: the old threshold was tuned against accuracy values that
+  // were metres being read as feet, making it ~3.3x tighter than intended —
+  // this is the same rule expressed in real metres.
   function isSelfIntersecting(pins) {
     if (pins.length < 4) return false;
-    const latRef = pins[0].lat;
-    const lngRef = pins[0].lng;
-    const R = 6371000;
-    const pts = pins.map(p => ({
-      x: (p.lng - lngRef) * Math.PI / 180 * R * Math.cos(latRef * Math.PI / 180),
-      y: (p.lat - latRef) * Math.PI / 180 * R,
-      acc: p.accuracy,
-    }));
+    const pts = project(pins);
     const n = pts.length;
     const ccw = (a, b, c) => (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
     const segmentsIntersect = (a1, a2, b1, b2) =>
@@ -996,8 +1315,8 @@
         const b1 = pts[j], b2 = pts[(j + 1) % n];
         if (segmentsIntersect(a1, a2, b1, b2)) {
           const depth = crossDepth(a1, a2, b1, b2);
-          const avgAccFt = (a1.acc + a2.acc + b1.acc + b2.acc) / 4;
-          const threshold = Math.max(1.5, avgAccFt * 0.3048 * 2.5);
+          const avgAccM = (a1.acc + a2.acc + b1.acc + b2.acc) / 4;
+          const threshold = Math.max(1.5, avgAccM * 2);
           if (depth > threshold) return true;
         }
       }
@@ -1011,11 +1330,11 @@
   // and density are both optional per layer — density mainly matters for
   // topsoil, where it swings a lot; other materials are fairly standard so
   // crews can just leave it blank and skip the tons conversion.
-  function layerVolume(l) {
+  function layerVolume(l, areaSqft) {
     const depth = parseFloat(l.depth);
-    if (!state.areaSqft || !depth || depth <= 0) return null;
+    if (!areaSqft || !depth || depth <= 0) return null;
     const depthFt = l.unit === 'in' ? depth / 12 : depth;
-    const rawCuft = state.areaSqft * depthFt;
+    const rawCuft = areaSqft * depthFt;
     const wastePct = parseFloat(l.wastePct);
     const cuft = wastePct > 0 ? rawCuft * (1 + wastePct / 100) : rawCuft;
     const cuyd = cuft / 27;
@@ -1028,8 +1347,13 @@
     return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   }
 
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   addLayerBtn.addEventListener('click', () => {
-    state.layers.push({ id: state.nextLayerId++, material: '', depth: '', unit: 'in', wastePct: '', density: '' });
+    const z = activeZone();
+    z.layers.push({ id: z.nextLayerId++, material: '', depth: '', unit: 'in', wastePct: '', density: '' });
     renderLayers();
     const materialInputs = layersList.querySelectorAll('.layer-material');
     const lastInput = materialInputs[materialInputs.length - 1];
@@ -1040,20 +1364,20 @@
   layersList.addEventListener('input', (e) => {
     const item = e.target.closest('.layer-item');
     if (!item) return;
-    const layer = state.layers.find(l => l.id === Number(item.dataset.id));
+    const layer = activeZone().layers.find(l => l.id === Number(item.dataset.id));
     if (!layer) return;
     if (e.target.classList.contains('layer-material')) {
       layer.material = e.target.value;
     } else if (e.target.classList.contains('layer-depth')) {
       layer.depth = e.target.value;
-      item.querySelector('.layer-volume').textContent = volumeLabel(layer);
-      updateLayersTotal();
     } else if (e.target.classList.contains('layer-waste')) {
       layer.wastePct = e.target.value;
-      item.querySelector('.layer-volume').textContent = volumeLabel(layer);
-      updateLayersTotal();
     } else if (e.target.classList.contains('layer-density')) {
       layer.density = e.target.value;
+    } else {
+      return;
+    }
+    if (!e.target.classList.contains('layer-material')) {
       item.querySelector('.layer-volume').textContent = volumeLabel(layer);
       updateLayersTotal();
     }
@@ -1063,7 +1387,7 @@
   layersList.addEventListener('change', (e) => {
     if (!e.target.classList.contains('layer-unit')) return;
     const item = e.target.closest('.layer-item');
-    const layer = state.layers.find(l => l.id === Number(item.dataset.id));
+    const layer = activeZone().layers.find(l => l.id === Number(item.dataset.id));
     if (!layer) return;
     layer.unit = e.target.value;
     item.querySelector('.layer-volume').textContent = volumeLabel(layer);
@@ -1074,13 +1398,14 @@
   layersList.addEventListener('click', (e) => {
     if (!e.target.classList.contains('layer-remove')) return;
     const item = e.target.closest('.layer-item');
-    state.layers = state.layers.filter(l => l.id !== Number(item.dataset.id));
+    const z = activeZone();
+    z.layers = z.layers.filter(l => l.id !== Number(item.dataset.id));
     renderLayers();
     saveState();
   });
 
   function volumeLabel(l) {
-    const vol = layerVolume(l);
+    const vol = layerVolume(l, zoneSqft(activeZone()));
     if (!vol) return '—';
     let label = `${vol.cuyd.toFixed(2)} yd³`;
     if (vol.tons != null) label += ` · ${vol.tons.toFixed(1)}t`;
@@ -1088,13 +1413,14 @@
   }
 
   function renderLayers() {
-    layersCountEl.textContent = `${state.layers.length} layer${state.layers.length !== 1 ? 's' : ''}`;
-    if (state.layers.length === 0) {
+    const layers = activeZone().layers;
+    layersCountEl.textContent = `${layers.length} layer${layers.length !== 1 ? 's' : ''}`;
+    if (layers.length === 0) {
       layersList.innerHTML = '<div class="empty-state">Add a layer to calculate material volume</div>';
       layersTotalEl.style.display = 'none';
       return;
     }
-    layersList.innerHTML = state.layers.map(l => `
+    layersList.innerHTML = layers.map(l => `
       <div class="layer-item" data-id="${l.id}">
         <div class="layer-row1">
           <input type="text" class="layer-material" placeholder="Material (e.g. D-1 base)" value="${escapeAttr(l.material)}" maxlength="40">
@@ -1124,7 +1450,8 @@
   }
 
   function updateLayersTotal() {
-    const vols = state.layers.map(layerVolume).filter(Boolean);
+    const areaSqft = zoneSqft(activeZone());
+    const vols = activeZone().layers.map(l => layerVolume(l, areaSqft)).filter(Boolean);
     if (vols.length === 0) {
       layersTotalEl.style.display = 'none';
       return;
@@ -1133,7 +1460,7 @@
     const totalCuFt = vols.reduce((s, v) => s + v.cuft, 0);
     const tonsVols = vols.filter(v => v.tons != null);
     layersTotalEl.style.display = 'block';
-    let html = `Total: ${totalCuYd.toFixed(2)} yd³ &nbsp;(${Math.round(totalCuFt).toLocaleString()} ft³)`;
+    let html = `${escapeHtml(activeZone().name)} total: ${totalCuYd.toFixed(2)} yd³ &nbsp;(${Math.round(totalCuFt).toLocaleString()} ft³)`;
     if (tonsVols.length) {
       const totalTons = tonsVols.reduce((s, v) => s + v.tons, 0);
       html += `<br>${totalTons.toFixed(1)} tons${tonsVols.length < vols.length ? ' <span style="font-weight:400;">(layers with density set)</span>' : ''}`;
@@ -1141,39 +1468,115 @@
     layersTotalEl.innerHTML = html;
   }
 
-  // ── LIVE MAP (TomTom) ────────────────────────────────
-  // Real satellite/street imagery under the walked perimeter, instead of
-  // the old abstract shape-only preview — so odd/notched shapes can be seen
-  // against the actual property while walking, not just as a floating outline.
-  // The map is a visual enhancement only: pin-dropping and area math must
-  // keep working even if the SDK fails to load (e.g. no signal on site).
-  const TOMTOM_API_KEY = 'Uj3etMIVUsO9ZO7Z1TeklWioWSkLs5tY';
+  // ── LIVE MAP (MapLibre + Alaska imagery) ─────────────
+  // Real aerial imagery under the walked perimeter, so odd/notched shapes can
+  // be checked against the actual property. The map is also an input: corners
+  // can be tapped in and dragged, which on sharp imagery beats GPS.
+  // Everything here is optional — pin-dropping and area math must keep working
+  // if the map fails to load (no signal on site).
+  //
+  // Imagery is stacked rather than switched. Esri World Imagery is the global
+  // base; the Municipality of Anchorage and Mat-Su Borough orthos sit on top,
+  // each fenced to its own `bounds` so no tile is ever requested outside its
+  // coverage. Verified out-of-area behaviour: MOA's cache 404s, and Mat-Su's
+  // exportImage returns RGBA with alpha 0 — both fall through to Esri cleanly,
+  // so a job that straddles the Muni/Borough line just works.
+  const TOMTOM_API_KEY = 'Uj3etMIVUsO9ZO7Z1TeklWioWSkLs5tY'; // geocoding only
+  const MOA_BOUNDS = [-150.09, 60.85, -149.04, 61.47];
+  const MSB_BOUNDS = [-151.10, 61.00, -146.40, 62.60];
+  const ESRI_TILES = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  const moaTiles = year =>
+    `https://www.ancgis.com/arcgis/rest/services/imagery_public/Photo_${year}/MapServer/tile/{z}/{y}/{x}`;
+  const msbExport = svc =>
+    `https://maps.matsugov.us/imagery/rest/services/Imagery/${svc}/ImageServer/exportImage`
+    + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image';
+
+  // `nativeZoom` is where each source runs out of real pixels. Past it the
+  // tile is only stretched, so it also caps how precisely a tapped corner can
+  // honestly be placed (see mapTapAccuracyM). Mat-Su publishes 0.5 ft pixels,
+  // which works out to about z19 at this latitude.
+  const IMAGERY = {
+    auto:  { label: 'Best available', moa: '2024', msb: 'AerialMosaic_2024_SP_Dyn' },
+    moa15: { label: 'Anchorage 2015 (older)', moa: '2015', msb: 'AerialMosaic_2024_SP_Dyn' },
+    msb25: { label: 'Mat-Su 2025 (newest)', moa: '2024', msb: 'Aerial_Mosaic_2025_SP_Dyn' },
+  };
+  const NATIVE_ZOOM = { esri: 19, moa: 21, msb: 19 };
+  // Floor on how well a corner can be placed on each source, in metres — the
+  // imagery's own georegistration error, which no amount of zooming removes.
+  // Neither MOA nor Mat-Su publishes an accuracy statement for these mosaics,
+  // so these are deliberately conservative placeholders: ground-controlled
+  // municipal orthos are trusted more than a global satellite mosaic. If
+  // either agency ever publishes an RMSE, set the number from it.
+  const SOURCE_FLOOR_M = { moa: 0.6, msb: 0.9, esri: 3.0 };
+
   let map = null;
   let mapReady = false;
   let youAreHereMarker = null;
   let pinMarkers = [];
+  let imageryKey = 'auto';
+  let showParcels = false;
+
+  function buildStyle(key) {
+    const cfg = IMAGERY[key] || IMAGERY.auto;
+    return {
+      version: 8,
+      sources: {
+        esri: { type: 'raster', tiles: [ESRI_TILES], tileSize: 256, maxzoom: 19,
+                attribution: 'Esri, Maxar, Earthstar Geographics' },
+        moa:  { type: 'raster', tiles: [moaTiles(cfg.moa)], tileSize: 256, maxzoom: 21,
+                bounds: MOA_BOUNDS, attribution: 'Municipality of Anchorage' },
+        msb:  { type: 'raster', tiles: [msbExport(cfg.msb)], tileSize: 256, maxzoom: 21,
+                bounds: MSB_BOUNDS, attribution: 'Matanuska-Susitna Borough' },
+      },
+      layers: [
+        { id: 'bg', type: 'background', paint: { 'background-color': '#20241f' } },
+        { id: 'esri', type: 'raster', source: 'esri' },
+        { id: 'msb', type: 'raster', source: 'msb' },
+        { id: 'moa', type: 'raster', source: 'moa' },
+      ],
+    };
+  }
+
+  // Which source is actually supplying pixels under a given point. Ordered
+  // most-local-first, matching the layer stack.
+  function sourceAt(lng, lat) {
+    const inside = b => lng >= b[0] && lng <= b[2] && lat >= b[1] && lat <= b[3];
+    if (inside(MOA_BOUNDS)) return 'moa';
+    if (inside(MSB_BOUNDS)) return 'msb';
+    return 'esri';
+  }
+
+  function renderCredit() {
+    const c = document.getElementById('map-credit');
+    if (!c) return;
+    const centre = map ? map.getCenter() : { lng: -149.9, lat: 61.2 };
+    const who = { moa: 'Municipality of Anchorage', msb: 'Matanuska-Susitna Borough', esri: 'Esri / Maxar' };
+    c.textContent = `Imagery: ${who[sourceAt(centre.lng, centre.lat)]} · here ≈ ${
+      (mapTapAccuracyM() * M_TO_FT).toFixed(1)} ft per tapped corner`;
+  }
 
   function initMap() {
     try {
-      tt.setProductInfo('Titan Alaska Yard Measure', '1.0');
-      map = tt.map({
-        key: TOMTOM_API_KEY,
-        container: 'tomtom-map',
+      map = new maplibregl.Map({
+        container: 'yard-map',
         center: [-149.9003, 61.2181], // Anchorage, until GPS/search moves it
         zoom: 17,
-        style: 'https://api.tomtom.com/style/1/style/*?map=2/basic_street-satellite&poi=2/poi_dynamic-satellite&key=' + TOMTOM_API_KEY,
+        maxZoom: 22,
+        style: buildStyle(imageryKey),
+        attributionControl: false,
+        // Required so the snapshot can read the rendered map back off the
+        // WebGL canvas; without it the buffer is cleared after compositing.
+        preserveDrawingBuffer: true,
       });
-      map.addControl(new tt.NavigationControl(), 'top-right');
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      map.on('moveend', renderCredit);
       map.on('load', () => {
         mapReady = true;
-        map.addSource('yard-shape', {
-          type: 'geojson',
-          data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[]] } },
-        });
-        map.addLayer({ id: 'yard-shape-fill', type: 'fill', source: 'yard-shape', paint: { 'fill-color': '#2d6a2d', 'fill-opacity': 0.25 } });
-        map.addLayer({ id: 'yard-shape-line', type: 'line', source: 'yard-shape', paint: { 'line-color': '#2d6a2d', 'line-width': 3 } });
+        addShapeLayers();
+        map.on('click', onMapClick);
         if (state.currentPos) updateYouAreHere(state.currentPos.lat, state.currentPos.lng);
-        updateMapShape();
+        updateMapShape({ fit: true });
+        renderCredit();
       });
     } catch (e) {
       const wrap = document.getElementById('map-wrap');
@@ -1181,35 +1584,194 @@
     }
   }
 
-  // Redraws pin markers + the walked polygon/line on the map from state.pins.
-  function updateMapShape() {
+  function addShapeLayers() {
+    if (map.getSource('yard-shape')) return;
+    map.addSource('yard-shape', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+    map.addLayer({
+      id: 'yard-shape-fill', type: 'fill', source: 'yard-shape',
+      paint: {
+        'fill-color': ['case', ['get', 'active'], '#2d6a2d', '#3a3a3a'],
+        'fill-opacity': ['case', ['get', 'active'], 0.25, 0.12],
+      },
+    });
+    // Two line layers rather than one with a `case` on the dash pattern:
+    // line-dasharray takes no data expressions, and MapLibre's response to one
+    // is to log an error and drop the whole layer — silently leaving the shape
+    // with a fill and no outline. Splitting on a filter keeps each dash
+    // pattern constant, which is supported.
+    map.addLayer({
+      id: 'yard-shape-line-other', type: 'line', source: 'yard-shape',
+      filter: ['!', ['get', 'active']],
+      paint: { 'line-color': '#dddddd', 'line-width': 2, 'line-dasharray': [2, 2], 'line-opacity': 0.9 },
+    });
+    map.addLayer({
+      id: 'yard-shape-line', type: 'line', source: 'yard-shape',
+      filter: ['get', 'active'],
+      paint: { 'line-color': '#2d6a2d', 'line-width': 3 },
+    });
+  }
+
+  // How precisely a corner can be placed by tapping. A fingertip lands within
+  // roughly 8 screen pixels, so precision improves as you zoom — but only up
+  // to the point where the imagery still has real pixels. Past a source's
+  // native zoom the tile is merely stretched, and zooming further would let
+  // the app claim accuracy the photo cannot support, so the zoom used here is
+  // clamped to that ceiling. Floored again by the imagery's own
+  // georegistration error, which usually dominates anyway.
+  function mapTapAccuracyM(lngLat) {
+    if (!map) return 3;
+    const c = lngLat || map.getCenter();
+    const src = sourceAt(c.lng, c.lat);
+    const zoom = Math.min(map.getZoom(), NATIVE_ZOOM[src]);
+    const metresPerPx = 156543.03392 * Math.cos(c.lat * Math.PI / 180) / Math.pow(2, zoom);
+    return Math.max(SOURCE_FLOOR_M[src] || IMAGERY_FLOOR_M, metresPerPx * 8);
+  }
+
+  function onMapClick(e) {
+    if (!state.tapMode) return;
+    // Taps that land on an existing marker are drags/mistaps, not new corners.
+    if (e.originalEvent && e.originalEvent.target.closest &&
+        e.originalEvent.target.closest('.map-pin-marker')) return;
+    addPin({
+      lat: e.lngLat.lat,
+      lng: e.lngLat.lng,
+      accuracy: mapTapAccuracyM(e.lngLat),
+      src: 'map',
+    });
+    showToast(`Corner ${activeZone().pins.length} placed`);
+  }
+
+  tapModeBtn.addEventListener('click', () => {
+    state.tapMode = !state.tapMode;
+    tapModeBtn.classList.toggle('on', state.tapMode);
+    mapEl.classList.toggle('tap-armed', state.tapMode);
+    mapHint.textContent = state.tapMode
+      ? 'Tap each corner in order around the yard. Drag a pin to nudge it.'
+      : 'Drag any numbered pin to nudge a corner.';
+  });
+
+  // ── LOT LINES ────────────────────────────────────────
+  // Assessor parcel boundaries, easements and building footprints, drawn from
+  // whichever authority owns the ground. Both are uncached MapServers, so each
+  // tile is an on-the-fly export keyed off that tile's own bbox — MapLibre's
+  // {bbox-epsg-3857} token does the work. Bounded like the imagery, so a job
+  // outside both jurisdictions simply shows no lines rather than erroring.
+  const PARCEL_SOURCES = {
+    'parcels-moa': {
+      bounds: MOA_BOUNDS,
+      url: 'https://www.ancgis.com/arcgis/rest/services/Base_Maps/Base_Map/MapServer/export'
+         + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256'
+         + '&layers=show:13,2,4&format=png32&transparent=true&dpi=96&f=image',
+    },
+    'parcels-msb': {
+      bounds: MSB_BOUNDS,
+      url: 'https://maps.matsugov.us/map/rest/services/OpenData/Cadastral_Parcels/MapServer/export'
+         + '?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256'
+         + '&format=png32&transparent=true&dpi=96&f=image',
+    },
+  };
+
+  function setParcels(on) {
+    showParcels = on;
+    parcelBtn.classList.toggle('on', on);
     if (!mapReady) return;
+    Object.entries(PARCEL_SOURCES).forEach(([id, cfg]) => {
+      const has = !!map.getSource(id);
+      if (on && !has) {
+        map.addSource(id, { type: 'raster', tiles: [cfg.url], tileSize: 256, bounds: cfg.bounds, maxzoom: 21 });
+        // Beneath the walked outline so our own shape always reads on top.
+        map.addLayer({ id, type: 'raster', source: id, paint: { 'raster-opacity': 0.85 } }, 'yard-shape-fill');
+      } else if (!on && has) {
+        if (map.getLayer(id)) map.removeLayer(id);
+        map.removeSource(id);
+      }
+    });
+  }
+
+  parcelBtn.addEventListener('click', () => setParcels(!showParcels));
+
+  // Swapping imagery replaces the whole style, which discards our shape layers
+  // and parcel overlay — so both get rebuilt once the new style settles.
+  imagerySelect.innerHTML = Object.entries(IMAGERY)
+    .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  imagerySelect.value = imageryKey;
+  imagerySelect.addEventListener('change', () => {
+    if (!mapReady) return;
+    imageryKey = imagerySelect.value;
+    mapReady = false;
+    map.setStyle(buildStyle(imageryKey));
+    map.once('styledata', () => {
+      mapReady = true;
+      addShapeLayers();
+      if (showParcels) setParcels(true);
+      updateMapShape();
+      renderCredit();
+      renderAll();
+    });
+  });
+
+  // Redraws every zone's outline plus numbered, draggable markers for the
+  // active zone. Inactive zones stay as dimmed dashed outlines for context.
+  function updateMapShape(opts) {
+    if (!mapReady) return;
+    const z = activeZone();
+
     pinMarkers.forEach(m => m.remove());
-    pinMarkers = state.pins.map((p, i) => {
+    pinMarkers = z.pins.map((p, i) => {
       const el = document.createElement('div');
       el.className = 'map-pin-marker' + (i === 0 ? ' first' : '');
       el.textContent = i + 1;
-      return new tt.Marker({ element: el, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(map);
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true })
+        .setLngLat([p.lng, p.lat])
+        .addTo(map);
+      marker.on('dragend', () => {
+        const ll = marker.getLngLat();
+        p.lat = ll.lat;
+        p.lng = ll.lng;
+        // A dragged corner is now a map-placed corner, with map precision.
+        p.accuracy = mapTapAccuracyM(ll);
+        p.src = 'map';
+        delete p.samples;
+        // Deferred: renderAll() tears down and rebuilds every marker, and
+        // destroying this marker from inside its own dragend handler runs
+        // ahead of the SDK's post-drag cleanup.
+        setTimeout(() => { renderAll(); saveState(); }, 0);
+      });
+      return marker;
     });
 
-    const coords = state.pins.map(p => [p.lng, p.lat]);
-    let geometry;
-    if (coords.length >= 3) {
-      geometry = { type: 'Polygon', coordinates: [[...coords, coords[0]]] };
-    } else if (coords.length === 2) {
-      geometry = { type: 'LineString', coordinates: coords };
-    } else {
-      geometry = { type: 'Polygon', coordinates: [[]] };
-    }
-    const src = map.getSource('yard-shape');
-    if (src) src.setData({ type: 'Feature', geometry });
+    const features = state.zones.map(zone => {
+      const coords = zone.pins.map(p => [p.lng, p.lat]);
+      let geometry = null;
+      if (coords.length >= 3) geometry = { type: 'Polygon', coordinates: [[...coords, coords[0]]] };
+      else if (coords.length === 2) geometry = { type: 'LineString', coordinates: coords };
+      if (!geometry) return null;
+      return { type: 'Feature', properties: { active: zone.id === state.activeZoneId }, geometry };
+    }).filter(Boolean);
 
-    // Keep the whole walked shape in view as pins are added.
-    if (coords.length >= 2) {
-      const lats = state.pins.map(p => p.lat), lngs = state.pins.map(p => p.lng);
-      const bounds = new tt.LngLatBounds([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]);
-      map.fitBounds(bounds, { padding: 60, maxZoom: 21, duration: 400 });
-    }
+    const src = map.getSource('yard-shape');
+    if (src) src.setData({ type: 'FeatureCollection', features });
+
+    // Only re-frame on request — auto-fitting on every tap would fight the
+    // user while they are placing corners by hand.
+    if (opts && opts.fit) fitTo(z.pins);
+  }
+
+  function boundsFor(pins) {
+    if (pins.length < 2) return null;
+    const lats = pins.map(p => p.lat), lngs = pins.map(p => p.lng);
+    return new maplibregl.LngLatBounds(
+      [Math.min(...lngs), Math.min(...lats)],
+      [Math.max(...lngs), Math.max(...lats)]
+    );
+  }
+
+  function fitTo(pins) {
+    const b = boundsFor(pins);
+    if (b) map.fitBounds(b, { padding: 60, maxZoom: 21, duration: 400 });
   }
 
   // Live "you are here" marker, updated on every GPS fix. Centers the map
@@ -1219,8 +1781,8 @@
     if (!youAreHereMarker) {
       const el = document.createElement('div');
       el.className = 'map-you-marker';
-      youAreHereMarker = new tt.Marker({ element: el, anchor: 'center' }).setLngLat([lng, lat]).addTo(map);
-      if (state.pins.length === 0) map.setCenter([lng, lat]);
+      youAreHereMarker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([lng, lat]).addTo(map);
+      if (activeZone().pins.length === 0) map.setCenter([lng, lat]);
     } else {
       youAreHereMarker.setLngLat([lng, lat]);
     }
@@ -1228,7 +1790,8 @@
 
   // ── ADDRESS SEARCH ───────────────────────────────────
   // Lets a crew jump the map to a job site before walking, independent of
-  // live GPS — useful for orienting before you're actually standing there.
+  // live GPS — useful for orienting, or for measuring a lot off imagery
+  // without setting foot on it.
   document.getElementById('map-search-btn').addEventListener('click', doMapSearch);
   document.getElementById('map-search-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') doMapSearch();
@@ -1243,7 +1806,7 @@
       const data = await res.json();
       const hit = data.results && data.results[0];
       if (!hit) { showToast('No results found'); return; }
-      map.flyTo({ center: [hit.position.lon, hit.position.lat], zoom: 18 });
+      map.flyTo({ center: [hit.position.lon, hit.position.lat], zoom: 19 });
       showToast(`Jumped to ${(hit.address && hit.address.freeformAddress) || q}`);
       input.blur();
     } catch (e) {
@@ -1255,7 +1818,10 @@
   // Builds a clean, purpose-made result card (not a raw phone screenshot)
   // for dropping into Buildertrend or similar job-tracking software.
   snapshotBtn.addEventListener('click', () => {
-    exportSnapshot().catch(() => showToast('Could not create snapshot'));
+    snapshotBtn.disabled = true;
+    exportSnapshot()
+      .catch(() => showToast('Could not create snapshot'))
+      .finally(updateButtons);
   });
 
   function roundRect(g, x, y, w, h, r) {
@@ -1268,48 +1834,128 @@
     g.closePath();
   }
 
-  function drawShapeOn(g, pins, x, y, w, h) {
-    if (pins.length < 2) return;
-    const latRef = pins[0].lat;
-    const lngRef = pins[0].lng;
-    const R = 6371000;
-    const pts = pins.map(p => ({
-      x: (p.lng - lngRef) * Math.PI / 180 * R * Math.cos(latRef * Math.PI / 180),
-      y: -(p.lat - latRef) * Math.PI / 180 * R,
-    }));
-    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const pad = 20;
-    const scaleX = (w - pad * 2) / (maxX - minX || 1);
-    const scaleY = (h - pad * 2) / (maxY - minY || 1);
-    const scale = Math.min(scaleX, scaleY);
-    const offX = x + (w - (maxX - minX) * scale) / 2;
-    const offY = y + (h - (maxY - minY) * scale) / 2;
-    const toCanvas = p => ({ x: offX + (p.x - minX) * scale, y: offY + (p.y - minY) * scale });
-    const cPts = pts.map(toCanvas);
+  function waitForMapIdle(ms) {
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+      const timer = setTimeout(finish, ms);
+      map.once('idle', finish);
+    });
+  }
 
+  // Grabs the live satellite view with every zone framed in it, plus the
+  // screen-pixel position of each corner so the outlines can be drawn on top.
+  // Markers are DOM elements and never appear in the WebGL buffer, so they are
+  // redrawn onto the snapshot canvas manually.
+  async function captureMap() {
+    const measured = state.zones.filter(z => z.pins.length >= 3);
+    const framePins = measured.flatMap(z => z.pins);
+    if (!mapReady || !map || framePins.length < 3) return null;
+
+    const prev = {
+      center: map.getCenter(), zoom: map.getZoom(),
+      bearing: map.getBearing(), pitch: map.getPitch(),
+    };
+    try {
+      const b = boundsFor(framePins);
+      if (!b) return null;
+      map.fitBounds(b, { padding: 40, maxZoom: 20, duration: 0 });
+      await waitForMapIdle(5000);
+
+      const live = map.getCanvas();
+      if (!live.width || !live.clientWidth) return null;
+      const shot = document.createElement('canvas');
+      shot.width = live.width;
+      shot.height = live.height;
+      const sg = shot.getContext('2d');
+      sg.drawImage(live, 0, 0);
+      // If a tile ever came back without CORS headers the copy is tainted, and
+      // the taint would spread to the snapshot and only blow up at toBlob() —
+      // by which point the offline fallback is no longer reachable. Probe for
+      // it here so a tainted capture degrades to the abstract outline instead.
+      sg.getImageData(0, 0, 1, 1);
+
+      // getCanvas() is sized in device pixels; project() returns CSS pixels.
+      const ratio = live.width / live.clientWidth;
+      const zones = measured
+        .map(z => ({
+          active: z.id === state.activeZoneId,
+          pts: z.pins.map(p => {
+            const q = map.project([p.lng, p.lat]);
+            return { x: q.x * ratio, y: q.y * ratio };
+          }),
+        }));
+      return { canvas: shot, zones };
+    } catch (e) {
+      return null;
+    } finally {
+      map.jumpTo(prev);
+    }
+  }
+
+  function drawPolygon(g, pts, opts) {
+    if (pts.length < 2) return;
     g.beginPath();
-    g.moveTo(cPts[0].x, cPts[0].y);
-    cPts.slice(1).forEach(p => g.lineTo(p.x, p.y));
+    g.moveTo(pts[0].x, pts[0].y);
+    pts.slice(1).forEach(p => g.lineTo(p.x, p.y));
     g.closePath();
-    g.fillStyle = 'rgba(45,106,45,0.12)';
+    g.fillStyle = opts.fill;
     g.fill();
-    g.strokeStyle = '#2d6a2d';
-    g.lineWidth = 3;
+    g.strokeStyle = opts.stroke;
+    g.lineWidth = opts.width;
+    if (opts.halo) {
+      g.save();
+      g.strokeStyle = 'rgba(0,0,0,0.45)';
+      g.lineWidth = opts.width + 4;
+      g.stroke();
+      g.restore();
+    }
     g.stroke();
-
-    cPts.forEach((p, i) => {
+    if (!opts.numbered) return;
+    pts.forEach((p, i) => {
       g.beginPath();
-      g.arc(p.x, p.y, 10, 0, Math.PI * 2);
+      g.arc(p.x, p.y, opts.dot, 0, Math.PI * 2);
       g.fillStyle = i === 0 ? '#c8a84b' : '#2d6a2d';
       g.fill();
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = 2;
+      g.stroke();
       g.fillStyle = '#ffffff';
-      g.font = '700 14px -apple-system, "Segoe UI", sans-serif';
+      g.font = `700 ${Math.round(opts.dot * 1.3)}px -apple-system, "Segoe UI", sans-serif`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillText(String(i + 1), p.x, p.y);
       g.textBaseline = 'alphabetic';
+    });
+  }
+
+  // Fallback for when the map can't be captured (offline, SDK blocked):
+  // the original abstract outline, scaled into the same card.
+  function drawAbstractShape(g, x, y, w, h) {
+    const zones = state.zones.filter(z => z.pins.length >= 3);
+    if (!zones.length) return;
+    const all = zones.flatMap(z => z.pins);
+    const pts = project(all).map(p => ({ x: p.x, y: -p.y }));
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const pad = 24;
+    const scale = Math.min((w - pad * 2) / (maxX - minX || 1), (h - pad * 2) / (maxY - minY || 1));
+    const offX = x + (w - (maxX - minX) * scale) / 2;
+    const offY = y + (h - (maxY - minY) * scale) / 2;
+
+    let i = 0;
+    zones.forEach(z => {
+      const zPts = z.pins.map(() => pts[i++]).map(p => ({
+        x: offX + (p.x - minX) * scale,
+        y: offY + (p.y - minY) * scale,
+      }));
+      const active = z.id === state.activeZoneId;
+      drawPolygon(g, zPts, {
+        fill: active ? 'rgba(45,106,45,0.12)' : 'rgba(60,60,60,0.08)',
+        stroke: active ? '#2d6a2d' : '#999',
+        width: 3, dot: 11, numbered: active,
+      });
     });
   }
 
@@ -1318,11 +1964,33 @@
   }
 
   async function exportSnapshot() {
-    const validLayers = state.layers
-      .map(l => ({ ...l, vol: layerVolume(l) }))
-      .filter(l => l.vol);
-    const layersBlockH = validLayers.length ? 86 + validLayers.length * 42 : 0;
-    const W = 1080, H = 1350 + layersBlockH;
+    const measured = state.zones.filter(z => z.pins.length >= 3);
+    if (!measured.length) { showToast('Need at least 3 pins'); return; }
+    // Keyed off zones that actually have an area — a half-outlined second zone
+    // shouldn't turn the card into a one-row "2 zones" breakdown.
+    const multi = measured.length > 1;
+    showToast('Building snapshot…');
+
+    // Per-zone material lines, tagged with the zone so a multi-zone job
+    // reads as an order sheet rather than one undifferentiated pile.
+    const materialRows = [];
+    measured.forEach(z => {
+      const areaSqft = zoneSqft(z);
+      z.layers.forEach(l => {
+        const vol = layerVolume(l, areaSqft);
+        if (vol) materialRows.push({ zone: z.name, layer: l, vol });
+      });
+    });
+
+    const zoneRows = multi ? measured.length + 1 : 0;
+    const W = 1080;
+    const cardH = 620;
+    const headH = 150, resultH = 340;
+    let H = headH + resultH + 40 + cardH + 60;
+    if (zoneRows) H += 46 + zoneRows * 40 + 20;
+    if (materialRows.length) H += 46 + materialRows.length * 42 + 60;
+    H += 120; // footer
+
     const c = document.createElement('canvas');
     c.width = W;
     c.height = H;
@@ -1334,7 +2002,7 @@
 
     // header
     g.fillStyle = '#2d6a2d';
-    g.fillRect(0, 0, W, 150);
+    g.fillRect(0, 0, W, headH);
     g.textAlign = 'left';
     g.fillStyle = '#ffffff';
     g.font = `700 44px ${F}`;
@@ -1344,86 +2012,145 @@
     g.fillText(new Date().toLocaleString(), 40, 112);
     g.globalAlpha = 1;
 
-    // result block
+    // headline area: the whole job when there is more than one zone
+    const totalSqm = measured.reduce((s, z) => s + calcAreaSqm(z.pins), 0);
+    const totalSqft = totalSqm * 10.7639;
+    const bandSqft = 2 * Math.sqrt(
+      measured.reduce((s, z) => { const v = areaSigmaSqm(z.pins); return s + v * v; }, 0)
+    ) * 10.7639;
+
     g.fillStyle = '#2d6a2d';
-    g.fillRect(0, 150, W, 330);
+    g.fillRect(0, headH, W, resultH);
     g.textAlign = 'center';
     g.globalAlpha = 0.7;
     g.fillStyle = '#ffffff';
     g.font = `700 24px ${F}`;
-    g.fillText('ESTIMATED AREA', W / 2, 210);
+    g.fillText(multi ? `TOTAL AREA · ${measured.length} ZONES` : 'ESTIMATED AREA', W / 2, headH + 60);
     g.globalAlpha = 1;
 
     g.fillStyle = '#c8a84b';
     g.font = `800 140px ${F}`;
-    g.fillText(resultSqft.textContent, W / 2, 345);
+    g.fillText(Math.round(totalSqft).toLocaleString(), W / 2, headH + 195);
 
     g.fillStyle = '#ffffff';
     g.globalAlpha = 0.9;
     g.font = `400 30px ${F}`;
-    g.fillText('square feet', W / 2, 385);
+    g.fillText('square feet', W / 2, headH + 235);
     g.globalAlpha = 1;
 
-    const rangeText = document.getElementById('result-range').textContent.trim();
-    if (rangeText) {
-      g.fillStyle = '#e8d9a8';
-      g.font = `600 26px ${F}`;
-      g.fillText(rangeText, W / 2, 425);
-    }
+    g.fillStyle = '#e8d9a8';
+    g.font = `600 26px ${F}`;
+    g.fillText(
+      `Range: ${Math.max(0, Math.round(totalSqft - bandSqft)).toLocaleString()} – ${Math.round(totalSqft + bandSqft).toLocaleString()} sq ft`,
+      W / 2, headH + 275
+    );
 
-    const extraText = resultExtra.textContent.trim();
-    if (extraText) {
-      g.globalAlpha = 0.85;
-      g.fillStyle = '#ffffff';
-      g.font = `400 24px ${F}`;
-      g.fillText(extraText.replace(/\s*·\s*/g, '   ·   '), W / 2, 460);
-      g.globalAlpha = 1;
-    }
+    const acres = totalSqm / 4046.86;
+    const extras = [];
+    if (acres >= 0.1) extras.push(`${acres.toFixed(2)} acres`);
+    extras.push(`${Math.round(totalSqm * 1.19599).toLocaleString()} sq yd`);
+    g.globalAlpha = 0.85;
+    g.fillStyle = '#ffffff';
+    g.font = `400 24px ${F}`;
+    g.fillText(extras.join('   ·   '), W / 2, headH + 312);
+    g.globalAlpha = 1;
 
     // job label
     g.textAlign = 'left';
-    let y = 530;
+    let y = headH + resultH + 50;
     const jobLabel = jobLabelInput.value.trim();
     if (jobLabel) {
       g.fillStyle = '#1a1a1a';
       g.font = `700 32px ${F}`;
       g.fillText(jobLabel, 40, y);
-      y += 30;
     }
 
-    // shape card
-    const cardTop = y + 10;
-    const cardH = 460;
+    // map card — real satellite imagery with the outlines drawn on top
+    const cardTop = y + 20;
+    const cardX = 40, cardW = W - 80;
     g.fillStyle = '#ffffff';
-    roundRect(g, 40, cardTop, W - 80, cardH, 16);
+    roundRect(g, cardX, cardTop, cardW, cardH, 16);
     g.fill();
+    g.save();
+    roundRect(g, cardX, cardTop, cardW, cardH, 16);
+    g.clip();
+
+    const cap = await captureMap();
+    if (cap) {
+      // Contain-fit the captured viewport, then put the corners through the
+      // identical transform so the outline lands on the right rooftops.
+      const s = Math.min(cardW / cap.canvas.width, cardH / cap.canvas.height);
+      const dw = cap.canvas.width * s, dh = cap.canvas.height * s;
+      const dx = cardX + (cardW - dw) / 2, dy = cardTop + (cardH - dh) / 2;
+      g.fillStyle = '#20241f';
+      g.fillRect(cardX, cardTop, cardW, cardH);
+      g.drawImage(cap.canvas, dx, dy, dw, dh);
+      cap.zones.forEach(z => {
+        drawPolygon(g, z.pts.map(p => ({ x: dx + p.x * s, y: dy + p.y * s })), {
+          fill: z.active ? 'rgba(45,106,45,0.28)' : 'rgba(30,30,30,0.22)',
+          stroke: z.active ? '#7ede7e' : '#dddddd',
+          width: 4, dot: 15, halo: true, numbered: z.active,
+        });
+      });
+    } else {
+      drawAbstractShape(g, cardX + 20, cardTop + 20, cardW - 40, cardH - 40);
+    }
+    g.restore();
     g.strokeStyle = '#e0e0e0';
     g.lineWidth = 2;
-    roundRect(g, 40, cardTop, W - 80, cardH, 16);
+    roundRect(g, cardX, cardTop, cardW, cardH, 16);
     g.stroke();
-    drawShapeOn(g, state.pins, 70, cardTop + 30, W - 140, cardH - 60);
 
-    // materials needed (from Material Layers, if any)
-    let cursorY = cardTop + cardH + 50;
-    if (validLayers.length) {
+    let cursorY = cardTop + cardH + 60;
+
+    // per-zone breakdown
+    if (zoneRows) {
+      g.textAlign = 'left';
+      g.fillStyle = '#1a1a1a';
+      g.font = `700 30px ${F}`;
+      g.fillText('Zones', 40, cursorY);
+      cursorY += 40;
+      measured.forEach(z => {
+        g.fillStyle = '#555';
+        g.font = `400 26px ${F}`;
+        g.textAlign = 'left';
+        g.fillText(z.name, 40, cursorY);
+        g.fillStyle = '#2d6a2d';
+        g.font = `700 26px ${F}`;
+        g.textAlign = 'right';
+        g.fillText(`${Math.round(zoneSqft(z)).toLocaleString()} sq ft`, W - 40, cursorY);
+        cursorY += 40;
+      });
+      g.textAlign = 'left';
+      g.fillStyle = '#2d6a2d';
+      g.font = `800 28px ${F}`;
+      g.fillText('Total', 40, cursorY + 4);
+      g.textAlign = 'right';
+      g.fillText(`${Math.round(totalSqft).toLocaleString()} sq ft`, W - 40, cursorY + 4);
+      cursorY += 60;
+    }
+
+    // materials needed
+    if (materialRows.length) {
       g.textAlign = 'left';
       g.fillStyle = '#1a1a1a';
       g.font = `700 30px ${F}`;
       g.fillText('Materials Needed', 40, cursorY);
-      cursorY += 36;
+      cursorY += 40;
 
-      validLayers.forEach(l => {
-        const name = l.material.trim() || 'Layer';
-        const depthLabel = `${l.depth}${l.unit === 'in' ? '"' : ' ft'}`;
-        const wastePct = parseFloat(l.wastePct);
+      materialRows.forEach(r => {
+        const name = r.layer.material.trim() || 'Layer';
+        const depthLabel = `${r.layer.depth}${r.layer.unit === 'in' ? '"' : ' ft'}`;
+        const wastePct = parseFloat(r.layer.wastePct);
         const wasteLabel = wastePct > 0 ? ` +${wastePct}% waste` : '';
-        const amountLabel = l.vol.tons != null
-          ? `${l.vol.cuyd.toFixed(2)} yd³ / ${l.vol.tons.toFixed(1)}t`
-          : `${l.vol.cuyd.toFixed(2)} yd³`;
+        const prefix = multi ? `${r.zone} · ` : '';
+        const amountLabel = r.vol.tons != null
+          ? `${r.vol.cuyd.toFixed(2)} yd³ / ${r.vol.tons.toFixed(1)}t`
+          : `${r.vol.cuyd.toFixed(2)} yd³`;
         g.fillStyle = '#555';
         g.font = `400 26px ${F}`;
         g.textAlign = 'left';
-        g.fillText(`${name} (${depthLabel}${wasteLabel})`, 40, cursorY);
+        g.fillText(`${prefix}${name} (${depthLabel}${wasteLabel})`, 40, cursorY);
         g.fillStyle = '#2d6a2d';
         g.font = `700 26px ${F}`;
         g.textAlign = 'right';
@@ -1431,10 +2158,10 @@
         cursorY += 42;
       });
 
-      const totalCuYd = validLayers.reduce((s, l) => s + l.vol.cuyd, 0);
-      const tonsLayers = validLayers.filter(l => l.vol.tons != null);
-      const totalTons = tonsLayers.reduce((s, l) => s + l.vol.tons, 0);
-      const totalLabel = tonsLayers.length
+      const totalCuYd = materialRows.reduce((s, r) => s + r.vol.cuyd, 0);
+      const tonsRows = materialRows.filter(r => r.vol.tons != null);
+      const totalTons = tonsRows.reduce((s, r) => s + r.vol.tons, 0);
+      const totalLabel = tonsRows.length
         ? `${totalCuYd.toFixed(2)} yd³ / ${totalTons.toFixed(1)}t`
         : `${totalCuYd.toFixed(2)} yd³`;
       g.textAlign = 'left';
@@ -1443,19 +2170,23 @@
       g.fillText('Total', 40, cursorY + 6);
       g.textAlign = 'right';
       g.fillText(totalLabel, W - 40, cursorY + 6);
-      g.textAlign = 'left';
-      cursorY += 50;
+      cursorY += 60;
     }
 
     // footer meta
-    const footY = cursorY;
-    const avgAcc = state.pins.reduce((s, p) => s + p.accuracy, 0) / state.pins.length;
+    g.textAlign = 'left';
+    const allPins = measured.flatMap(z => z.pins);
+    const avgAccFt = allPins.reduce((s, p) => s + p.accuracy, 0) / allPins.length * M_TO_FT;
+    const tapped = allPins.filter(p => p.src === 'map').length;
+    const srcNote = tapped === allPins.length ? 'placed on satellite imagery'
+      : tapped === 0 ? 'walked with GPS'
+      : `${allPins.length - tapped} walked, ${tapped} placed on imagery`;
     g.fillStyle = '#555';
     g.font = `400 24px ${F}`;
-    g.fillText(`${state.pins.length} corner pins · avg accuracy ±${Math.round(avgAcc)} ft`, 40, footY);
+    g.fillText(`${allPins.length} corner pins · ${srcNote} · avg ±${Math.round(avgAccFt)} ft`, 40, cursorY);
     g.globalAlpha = 0.6;
     g.font = `400 20px ${F}`;
-    g.fillText('Generated with Yard Measure', 40, footY + 36);
+    g.fillText('Generated with Yard Measure', 40, cursorY + 36);
     g.globalAlpha = 1;
 
     const blob = await new Promise(resolve => c.toBlob(resolve, 'image/png', 0.95));
@@ -1481,6 +2212,24 @@
     showToast('Snapshot saved');
   }
 
+  // ── RENDER / BUTTONS ─────────────────────────────────
+  function updateButtons() {
+    const z = activeZone();
+    pinBtn.disabled = !state.currentPos || state.stale;
+    undoBtn.disabled = z.pins.length === 0;
+    snapshotBtn.disabled = !state.zones.some(x => x.pins.length >= 3);
+  }
+
+  function renderAll(opts) {
+    ensureZone();
+    renderZoneTabs();
+    renderPins();
+    renderResult();
+    renderLayers();
+    updateMapShape(opts);
+    updateButtons();
+  }
+
   // ── PERSISTENCE ──────────────────────────────────────
   // Field crews walk a property outdoors on a phone browser — a reload,
   // backgrounding, or crash mid-job shouldn't lose the pins/layers already
@@ -1492,40 +2241,46 @@
   function saveState() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        pins: state.pins,
-        layers: state.layers,
-        nextLayerId: state.nextLayerId,
+        v: 2,
+        zones: state.zones,
+        activeZoneId: state.activeZoneId,
+        nextZoneId: state.nextZoneId,
+        nextPinId: state.nextPinId,
         jobLabel: jobLabelInput.value,
       }));
     } catch (e) { /* storage unavailable or full — not fatal */ }
-  }
-
-  function clearSavedState() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
   }
 
   function loadState() {
     let saved;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+      if (!raw) return false;
       saved = JSON.parse(raw);
-    } catch (e) { return; }
-    if (!saved || !Array.isArray(saved.pins) || saved.pins.length === 0) return;
+    } catch (e) { return false; }
+    if (!saved) return false;
 
-    state.pins = saved.pins;
-    state.layers = Array.isArray(saved.layers) ? saved.layers : [];
-    state.nextLayerId = saved.nextLayerId || (state.layers.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1);
-    if (saved.jobLabel) jobLabelInput.value = saved.jobLabel;
-
-    renderPins();
-    calcBtn.disabled = state.pins.length < 3;
-    if (state.pins.length >= 3) {
-      calcAndDisplay();
+    if (saved.v === 2 && Array.isArray(saved.zones) && saved.zones.length) {
+      state.zones = saved.zones;
+      state.activeZoneId = saved.activeZoneId;
+      state.nextZoneId = saved.nextZoneId || state.zones.length + 1;
+      state.nextPinId = saved.nextPinId ||
+        state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
+    } else if (Array.isArray(saved.pins) && saved.pins.length) {
+      // v1 saved a single flat job; fold it into one zone.
+      const z = newZone('Zone 1');
+      z.pins = saved.pins;
+      z.layers = Array.isArray(saved.layers) ? saved.layers : [];
+      z.nextLayerId = saved.nextLayerId || z.layers.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1;
+      z.pins.forEach(p => { if (!p.src) p.src = 'gps'; });
+      state.activeZoneId = z.id;
+      state.nextPinId = z.pins.reduce((m, p) => Math.max(m, p.id || 0), 0) + 1;
     } else {
-      renderLayers();
+      return false;
     }
-    showToast('Restored your last job');
+
+    if (saved.jobLabel) jobLabelInput.value = saved.jobLabel;
+    return true;
   }
 
   // ── TOAST ────────────────────────────────────────────
@@ -1537,7 +2292,10 @@
   }
 
   // ── INIT ─────────────────────────────────────────────
-  loadState();
+  const restored = loadState();
+  ensureZone();
+  renderAll();
+  if (restored) showToast('Restored your last job');
   startGPS();
   initMap();
 </script>
