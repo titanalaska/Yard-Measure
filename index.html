@@ -15,70 +15,265 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* ── DESIGN TOKENS ─────────────────────────────────
+     Sizes were previously picked one at a time — 11, 11.5, 12, 12.5, 13, 14,
+     15, 17, 19, 20 — which is why nothing quite lined up. Everything now
+     comes off a type ramp and a 4px spacing grid.
+     Colour is semantic (surface/text/border) rather than literal, so the
+     three themes below only have to restate the palette, not the rules. */
   :root {
-    --green: #2d6a2d;
-    --green-light: #3d8c3d;
-    --green-pale: #e8f5e8;
-    --gold: #c8a84b;
-    --dark: #1a1a1a;
-    --mid: #555;
-    --light: #f5f5f3;
-    --white: #ffffff;
-    --red: #c0392b;
-    --radius: 12px;
+    /* type ramp */
+    --t-xs: 11px;
+    --t-sm: 13px;
+    --t-md: 15px;
+    --t-lg: 18px;
+    --t-xl: 22px;
+    --t-huge: 46px;
+
+    /* 4px spacing grid */
+    --s1: 4px;  --s2: 8px;  --s3: 12px;
+    --s4: 16px; --s5: 24px; --s6: 32px;
+
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 18px;
+    --r-full: 999px;
+
+    --e1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.07);
+    --e2: 0 2px 10px rgba(0,0,0,.10);
+    --e3: 0 10px 30px rgba(0,0,0,.20);
+
+    --tap: 44px; /* minimum comfortable target, gloved */
+
+    /* Titan palette — kept */
+    --brand: #2d6a2d;
+    --brand-hi: #3d8c3d;
+    --brand-wash: #e8f5e8;
+    --accent: #c8a84b;
+    --danger: #c0392b;
+    --danger-wash: #fdf2f1;
+    --info: #1c6fb0;
+    --info-hi: #3aa0ff;
+    --info-wash: #eef6fd;
+
+    /* semantic surfaces — light */
+    --bg: #f4f5f2;
+    --surface: #ffffff;
+    --surface-2: #fafaf8;
+    --text: #16181a;
+    --text-dim: #5a6169;
+    --text-faint: #9aa1a8;
+    --border: #e3e5e1;
+    --border-strong: #cfd2cd;
+    --on-brand: #ffffff;
+    --scrim: rgba(0,0,0,.45);
+    --map-ctrl: rgba(255,255,255,.94);
+
+    /* The masthead is its own surface, separate from --brand, so it can stay
+       dark in dark mode instead of turning into a bright green slab.
+       --accent-on-brand is the headline number: the brand gold measured only
+       2.85:1 on green — below AA even for large text, and the number is the
+       one thing on screen that has to be readable. Lightened until it passes
+       while still reading as gold. */
+    --brand-surface: #2d6a2d;
+    --accent-on-brand: #f2dc9a;
   }
 
+  :root[data-theme="dark"] {
+    --brand-surface: #1b3d1e;
+    --accent-on-brand: #ffd977;
+    --bg: #12140f;
+    --surface: #1c1f1a;
+    --surface-2: #23271f;
+    --text: #eef0ea;
+    --text-dim: #a7b0a3;
+    --text-faint: #6f776c;
+    --border: #2e332a;
+    --border-strong: #414737;
+    --brand: #4f9b4f;
+    --brand-hi: #6cb86c;
+    --brand-wash: #1e2c1e;
+    --accent: #e0c268;
+    --danger: #e4705f;
+    --danger-wash: #2e1d1a;
+    --info: #6ab7f5;
+    --info-wash: #16232e;
+    --e1: 0 1px 2px rgba(0,0,0,.4);
+    --e2: 0 2px 10px rgba(0,0,0,.5);
+    --e3: 0 10px 30px rgba(0,0,0,.6);
+    --map-ctrl: rgba(28,31,26,.94);
+  }
+
+  /* Sunlight: maximum contrast for reading a phone in direct sun. Pure black
+     on pure white, heavier weights, and borders solid enough to survive
+     glare — deliberately not pretty, it's a legibility mode. */
+  :root[data-theme="sun"] {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #ffffff;
+    --text: #000000;
+    --text-dim: #262b2f;
+    --text-faint: #454c52;
+    --border: #000000;
+    --border-strong: #000000;
+    --brand: #14431a;
+    --brand-hi: #14431a;
+    --brand-wash: #ffffff;
+    --accent: #7a5c00;
+    --danger: #8c1f13;
+    --danger-wash: #ffffff;
+    --info: #0b3f6b;
+    --info-wash: #ffffff;
+    --e1: none; --e2: none; --e3: 0 8px 24px rgba(0,0,0,.35);
+    --map-ctrl: #ffffff;
+    --brand-surface: #0f3314;
+    --accent-on-brand: #ffd24a;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]):not([data-theme="sun"]) {
+      --bg: #12140f;
+      --surface: #1c1f1a;
+      --surface-2: #23271f;
+      --text: #eef0ea;
+      --text-dim: #a7b0a3;
+      --text-faint: #6f776c;
+      --border: #2e332a;
+      --border-strong: #414737;
+      --brand: #4f9b4f;
+      --brand-hi: #6cb86c;
+      --brand-wash: #1e2c1e;
+      --accent: #e0c268;
+      --danger: #e4705f;
+      --danger-wash: #2e1d1a;
+      --info: #6ab7f5;
+      --info-wash: #16232e;
+      --brand-surface: #1b3d1e;
+      --accent-on-brand: #ffd977;
+      --e1: 0 1px 2px rgba(0,0,0,.4);
+      --e2: 0 2px 10px rgba(0,0,0,.5);
+      --e3: 0 10px 30px rgba(0,0,0,.6);
+      --map-ctrl: rgba(28,31,26,.94);
+    }
+  }
+
+  /* Sunlight mode needs every edge to actually read, not just imply. */
+  :root[data-theme="sun"] .card,
+  :root[data-theme="sun"] .point-item,
+  :root[data-theme="sun"] .layer-item,
+  :root[data-theme="sun"] .job-row { border: 2px solid #000; }
+
+  /* legacy aliases, so older rules keep resolving during the transition */
+  :root {
+    --green: var(--brand);
+    --green-light: var(--brand-hi);
+    --green-pale: var(--brand-wash);
+    --gold: var(--accent);
+    --dark: var(--text);
+    --mid: var(--text-dim);
+    --light: var(--bg);
+    --white: var(--surface);
+    --red: var(--danger);
+    --radius: var(--r-md);
+  }
+
+  /* ── ICONS ─────────────────────────────────────────
+     One stroke set at a single weight, inheriting currentColor, so every
+     control matches and renders identically on every phone. Emoji did not. */
+  .ic {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+
+  .ic-sm { width: 16px; height: 16px; }
+  .ic-lg { width: 24px; height: 24px; }
+
+  /* App shell: the frame stays put and only the middle scrolls. Without this
+     the bottom bar had to be `sticky`, which leaves it stranded mid-page
+     whenever the content is shorter than the screen. */
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: var(--light);
-    color: var(--dark);
-    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    height: 100dvh; /* survives the mobile URL bar sliding in and out */
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
+  header, #status-bar, #result-area, .result-warning, #action-bar { flex: 0 0 auto; }
+
+  #scroll-area {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--s2);
+  }
+
+  /* Surfaces share one recipe so cards stop drifting apart. */
+  .card, .point-item, .layer-item, .job-row, .empty-state {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: var(--e1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+
+  /* Single compact line: the tagline was costing 20px on every screen to say
+     something you only need once. */
   header {
-    background: var(--green);
-    color: white;
-    padding: 18px 20px 14px;
+    background: var(--brand-surface);
+    color: var(--on-brand);
+    padding: var(--s2) var(--s3);
     display: flex;
     align-items: center;
-    gap: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    gap: var(--s2);
+    z-index: 60;
   }
 
-  .logo {
-    font-size: 28px;
-  }
+  header .logo { opacity: 0.95; }
 
-  .header-text h1 {
-    font-size: 20px;
+  header h1 {
+    font-size: var(--t-lg);
     font-weight: 700;
     letter-spacing: -0.3px;
+    margin-right: auto;
   }
 
-  .header-text p {
-    font-size: 12px;
-    opacity: 0.75;
-    margin-top: 1px;
-  }
-
-  #jobs-btn {
-    margin-left: auto;
-    background: rgba(255,255,255,0.15);
-    border: 1.5px solid rgba(255,255,255,0.5);
-    color: white;
-    border-radius: 20px;
-    padding: 9px 14px;
-    font-size: 13px;
+  .hdr-btn {
+    background: rgba(255,255,255,0.14);
+    border: 1.5px solid rgba(255,255,255,0.38);
+    color: inherit;
+    border-radius: var(--r-full);
+    min-height: 38px;
+    padding: 0 var(--s3);
+    font-size: var(--t-sm);
     font-weight: 700;
     font-family: inherit;
     cursor: pointer;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     -webkit-tap-highlight-color: transparent;
+    transition: background .15s, transform .1s;
   }
 
-  #jobs-btn:active { opacity: 0.7; }
+  .hdr-btn:active { transform: scale(0.94); background: rgba(255,255,255,0.3); }
+  #theme-btn { padding: 0 var(--s2); }
 
   /* JOBS SHEET */
   #jobs-overlay {
@@ -121,16 +316,21 @@
   .sheet-close {
     background: none;
     border: none;
-    font-size: 28px;
-    line-height: 1;
-    color: var(--mid);
+    color: var(--text-dim);
     cursor: pointer;
-    padding: 0 6px;
+    width: var(--tap);
+    height: var(--tap);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-sm);
   }
+
+  .sheet-close:active { background: var(--surface-2); }
 
   .sheet-note {
     font-size: 11.5px;
-    color: #999;
+    color: var(--text-faint);
     text-align: center;
     margin-top: 14px;
     line-height: 1.4;
@@ -144,7 +344,7 @@
   }
 
   .job-row {
-    background: white;
+    background: var(--surface);
     border-radius: 10px;
     padding: 12px 8px 12px 14px;
     display: flex;
@@ -180,35 +380,38 @@
 
   .job-meta { font-size: 11.5px; color: var(--mid); margin-top: 3px; }
   .job-badge { color: var(--green); font-weight: 700; }
-  .job-badge.run { color: #1c6fb0; }
+  .job-badge.run { color: var(--info); }
 
   .job-act {
     background: none;
     border: none;
-    font-size: 16px;
-    width: 36px;
-    height: 40px;
-    border-radius: 6px;
-    color: #b0b0b0;
+    width: 40px;
+    height: 44px;
+    border-radius: var(--r-sm);
+    color: var(--text-faint);
     cursor: pointer;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     -webkit-tap-highlight-color: transparent;
   }
 
-  .job-act:active { background: #f0f0f0; }
+  .job-act:active { background: var(--surface-2); color: var(--text); }
 
   /* STATUS BAR */
   /* Read at arm's length, outdoors, in sun — so the accuracy figure is the
      biggest thing in this bar, not the smallest. */
   #status-bar {
-    background: var(--dark);
-    color: white;
-    padding: 10px 16px;
-    font-size: 14px;
+    background: var(--surface);
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    padding: var(--s2) var(--s4);
+    font-size: var(--t-sm);
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-height: 48px;
+    gap: var(--s2);
+    min-height: 44px;
   }
 
   .status-dot {
@@ -229,81 +432,122 @@
     50% { opacity: 0.3; }
   }
 
-  /* RESULT AREA */
+  /* RESULT — collapsed to one line, expands on tap */
+  /* Sits flush under the header and shares its colour deliberately — together
+     they read as one masthead, with a hairline to separate the two. */
   #result-area {
-    background: var(--green);
-    color: white;
-    text-align: center;
-    padding: 24px 20px 20px;
+    display: block;
+    width: 100%;
+    background: var(--brand-surface);
+    color: var(--on-brand);
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.18);
+    font-family: inherit;
+    text-align: left;
+    padding: var(--s2) var(--s4);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .result-label {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    opacity: 0.7;
-    margin-bottom: 4px;
+  .result-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s2);
+    min-height: 40px;
+  }
+
+  .result-headline {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-shrink: 0;
   }
 
   .result-number {
-    font-size: 56px;
+    font-size: 30px;
     font-weight: 800;
-    line-height: 1;
-    color: var(--gold);
-    letter-spacing: -2px;
+    line-height: 1.2;
+    color: var(--accent-on-brand);
+    letter-spacing: -1px;
+    font-variant-numeric: tabular-nums;
   }
 
   .result-unit {
-    font-size: 18px;
-    font-weight: 400;
-    opacity: 0.9;
-    margin-top: 2px;
+    font-size: var(--t-sm);
+    font-weight: 500;
+    opacity: 0.85;
   }
 
-  .result-secondary {
-    margin-top: 10px;
-    font-size: 13px;
+  .result-label {
+    font-size: var(--t-xs);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.65;
+    margin-left: auto;
+    text-align: right;
+    line-height: 1.3;
+  }
+
+  .result-chev {
+    align-self: center;
+    color: inherit;
     opacity: 0.7;
+    transition: transform .2s;
+    flex-shrink: 0;
+  }
+
+  #result-area[aria-expanded="true"] .result-chev { transform: rotate(180deg); }
+
+  .result-detail { display: none; padding-bottom: var(--s2); }
+  #result-area[aria-expanded="true"] .result-detail { display: block; }
+
+  .result-secondary {
+    margin-top: var(--s2);
+    font-size: var(--t-sm);
+    opacity: 0.75;
     display: flex;
-    justify-content: center;
-    gap: 20px;
+    gap: var(--s4);
     flex-wrap: wrap;
   }
 
   .result-range {
-    margin-top: 8px;
-    font-size: 14px;
-    opacity: 0.85;
-    letter-spacing: 0.2px;
+    margin-top: var(--s2);
+    font-size: var(--t-sm);
+    opacity: 0.9;
   }
 
   .result-range span {
-    color: var(--gold);
+    color: var(--accent-on-brand);
     font-weight: 700;
   }
 
   .result-total {
     display: none;
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255,255,255,0.2);
-    font-size: 14px;
+    margin-top: var(--s3);
+    padding-top: var(--s3);
+    border-top: 1px solid rgba(255,255,255,0.22);
+    font-size: var(--t-sm);
+    line-height: 1.6;
   }
 
-  .result-total b {
-    color: var(--gold);
-    font-size: 17px;
-  }
+  .result-total b { color: var(--accent-on-brand); font-size: var(--t-md); }
 
   .result-warning {
     display: none;
-    background: #fce4e4;
-    color: var(--red);
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--danger-wash);
+    color: var(--danger);
     text-align: center;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 8px 16px;
+    font-size: var(--t-xs);
+    font-weight: 700;
+    padding: var(--s2) var(--s3);
+    border-top: 1px solid var(--danger);
+    border-bottom: 1px solid var(--danger);
   }
+
+  .result-warning[style*="block"] { display: flex !important; }
 
   /* SECTION CHROME */
   .section-header {
@@ -333,9 +577,9 @@
   .empty-state {
     text-align: center;
     padding: 20px;
-    color: #bbb;
+    color: var(--text-faint);
     font-size: 13px;
-    background: white;
+    background: var(--surface);
     border-radius: 8px;
   }
 
@@ -353,20 +597,41 @@
   }
 
   .zone-chip {
-    background: white;
-    border: 2px solid #e0e0e0;
-    border-radius: 20px;
-    padding: 8px 12px;
-    font-size: 13px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--r-full);
+    padding: 0 var(--s1) 0 0;
+    font-size: var(--t-sm);
     font-family: inherit;
-    color: var(--mid);
-    cursor: pointer;
+    color: var(--text-dim);
     white-space: nowrap;
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 2px;
+    min-height: 40px;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  .zone-pick {
+    background: none;
+    border: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: 0 var(--s2) 0 var(--s3);
+    min-height: 36px;
+    border-radius: var(--r-full);
+  }
+
+  .zone-chip.add {
+    padding: 0 var(--s3);
+    cursor: pointer;
+    gap: 6px;
+    justify-content: center;
   }
 
   .zone-chip.active {
@@ -384,13 +649,19 @@
   .zone-chip .chip-act {
     border: none;
     background: none;
-    font-size: 13px;
-    line-height: 1;
-    padding: 2px;
     color: inherit;
-    opacity: 0.55;
+    opacity: 0.65;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: var(--r-sm);
   }
+
+  .zone-chip .chip-act:active { opacity: 1; background: rgba(0,0,0,.08); }
 
   .zone-chip.add {
     border-style: dashed;
@@ -407,14 +678,14 @@
 
   .zone-chip.cut.active {
     border-color: var(--red);
-    background: #fdf2f1;
+    background: var(--danger-wash);
   }
 
-  .zone-chip.line { color: #1c6fb0; }
+  .zone-chip.line { color: var(--info); }
 
   .zone-chip.line.active {
-    border-color: #3aa0ff;
-    background: #eef6fd;
+    border-color: var(--info-hi);
+    background: var(--info-wash);
   }
 
   /* POINTS LIST */
@@ -431,7 +702,7 @@
   }
 
   .point-item {
-    background: white;
+    background: var(--surface);
     border-radius: 8px;
     padding: 8px 10px 8px 12px;
     display: flex;
@@ -476,7 +747,7 @@
 
   .point-accuracy {
     font-size: 10px;
-    color: #999;
+    color: var(--text-faint);
   }
 
   .point-actions {
@@ -489,33 +760,38 @@
   .point-actions button {
     background: none;
     border: none;
-    color: #b0b0b0;
-    font-size: 15px;
+    color: var(--text-faint);
     cursor: pointer;
-    width: 34px;
+    width: 36px;
     height: 40px;
-    line-height: 1;
-    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-sm);
     -webkit-tap-highlight-color: transparent;
+    transition: background .12s, color .12s;
   }
 
-  .point-actions button:disabled { opacity: 0.25; }
-  .point-actions button:active { background: #f0f0f0; color: var(--green); }
-  .point-actions button.act-remove:active { color: var(--red); }
+  .point-actions button:disabled { opacity: 0.22; }
+  .point-actions button:not(:disabled):active { background: var(--brand-wash); color: var(--brand); }
+  .point-actions button.act-remove:active { background: var(--danger-wash); color: var(--danger); }
 
   .remove-btn {
     background: none;
     border: none;
-    color: #ccc;
-    font-size: 18px;
+    color: var(--text-faint);
     cursor: pointer;
-    padding: 4px 6px;
-    line-height: 1;
-    border-radius: 4px;
-    transition: color 0.15s;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-sm);
+    flex-shrink: 0;
+    transition: color .15s, background .15s;
   }
 
-  .remove-btn:active { color: var(--red); }
+  .remove-btn:active { color: var(--danger); background: var(--danger-wash); }
 
   /* LAYERS */
   #layers-section {
@@ -523,7 +799,7 @@
   }
 
   .layer-item {
-    background: white;
+    background: var(--surface);
     border-radius: 8px;
     padding: 10px 14px;
     margin-bottom: 6px;
@@ -540,7 +816,7 @@
 
   .layer-material {
     flex: 1;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 10px;
     font-size: 14px;
@@ -550,8 +826,18 @@
 
   .layer-material:focus {
     outline: none;
-    border-color: var(--green-light);
+    border-color: var(--brand-hi);
   }
+
+  /* Inputs inherit the theme rather than staying stubbornly white, and use a
+     16px base so iOS doesn't zoom the page when one is focused. */
+  input, select, textarea {
+    background: var(--surface);
+    color: var(--text);
+    font-size: 16px;
+  }
+
+  input::placeholder { color: var(--text-faint); }
 
   .layer-row2 {
     display: flex;
@@ -561,7 +847,7 @@
 
   .layer-depth {
     width: 70px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 10px;
     font-size: 14px;
@@ -574,12 +860,12 @@
   }
 
   .layer-unit {
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 6px;
     font-size: 13px;
     font-family: inherit;
-    background: white;
+    background: var(--surface);
   }
 
   .layer-volume {
@@ -602,7 +888,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 10px;
     min-width: 0;
@@ -647,12 +933,12 @@
   #job-label {
     width: 100%;
     padding: 12px 14px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--border);
     border-radius: var(--radius);
     font-size: 15px;
     font-family: inherit;
     color: var(--dark);
-    background: white;
+    background: var(--surface);
   }
 
   #job-label:focus {
@@ -671,177 +957,214 @@
 
   .btn {
     border: none;
-    border-radius: var(--radius);
-    padding: 18px;
-    font-size: 17px;
+    border-radius: var(--r-md);
+    min-height: var(--tap);
+    padding: var(--s3) var(--s4);
+    font-size: var(--t-md);
     font-weight: 700;
+    font-family: inherit;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    transition: transform 0.1s, opacity 0.1s;
+    gap: var(--s2);
+    transition: transform .1s, opacity .1s, background .15s;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
 
-  .btn:active { transform: scale(0.97); opacity: 0.85; }
+  .btn:active { transform: scale(0.97); }
+  .btn:focus-visible { outline: 3px solid var(--brand-hi); outline-offset: 2px; }
 
   .btn:disabled {
-    opacity: 0.4;
+    opacity: 0.42;
     cursor: not-allowed;
     transform: none;
   }
 
   .btn-primary {
-    background: var(--green);
-    color: white;
-    box-shadow: 0 4px 12px rgba(45,106,45,0.35);
-    font-size: 19px;
-    padding: 22px;
+    background: var(--brand);
+    color: #fff;
+    box-shadow: var(--e2);
+    font-size: var(--t-lg);
+    min-height: 56px;
   }
 
+  .btn-primary:not(:disabled):active { background: var(--brand-hi); }
+
   .btn-secondary {
-    background: white;
-    color: var(--green);
-    border: 2px solid var(--green);
+    background: var(--surface);
+    color: var(--brand);
+    border: 2px solid var(--brand);
   }
 
   .btn-danger {
-    background: white;
-    color: var(--red);
-    border: 2px solid #f0c0bc;
-    font-size: 14px;
-    padding: 14px;
+    background: var(--surface);
+    color: var(--danger);
+    border: 2px solid var(--danger);
   }
 
   .btn-row {
     display: flex;
-    gap: 10px;
+    gap: var(--s2);
   }
 
-  .btn-row .btn { flex: 1; font-size: 14px; padding: 14px; }
+  .btn-row .btn { flex: 1; font-size: var(--t-sm); min-height: var(--tap); padding: var(--s2); }
 
-  /* LIVE MAP */
+  /* LIVE MAP — controls float on it instead of stacking above it */
   #map-wrap {
-    padding: 0 16px 8px;
-  }
-
-  #map-search-bar {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  #map-search-input {
-    flex: 1;
-    padding: 10px 12px;
-    border: 2px solid #e0e0e0;
-    border-radius: var(--radius);
-    font-size: 14px;
-    font-family: inherit;
-    min-width: 0;
-  }
-
-  #map-search-input:focus {
-    outline: none;
-    border-color: var(--green-light);
-  }
-
-  #map-search-btn {
-    background: var(--green);
-    color: white;
-    border: none;
-    border-radius: var(--radius);
-    padding: 0 16px;
-    font-size: 16px;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  #map-search-btn:active { opacity: 0.85; }
-
-  /* Four controls do not fit one line on a 320px phone; let them wrap rather
-     than push the whole page sideways. */
-  #map-toolbar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  #tap-mode-btn, #parcel-btn, #lock-btn {
-    background: white;
-    border: 2px solid #e0e0e0;
-    color: var(--mid);
-    border-radius: 20px;
-    padding: 8px 14px;
-    font-size: 13px;
-    font-weight: 700;
-    font-family: inherit;
-    cursor: pointer;
-    flex-shrink: 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  #tap-mode-btn.on, #parcel-btn.on {
-    background: var(--green);
-    border-color: var(--green);
-    color: white;
-  }
-
-  #lock-btn.on {
-    background: var(--gold);
-    border-color: var(--gold);
-    color: #3a2f0b;
-  }
-
-  /* A locked map gets a gold edge, so it's obvious at a glance why dragging
-     the map does nothing. */
-  #yard-map.locked {
-    box-shadow: 0 0 0 3px var(--gold);
-  }
-
-  #imagery-select {
-    border: 2px solid #e0e0e0;
-    border-radius: 20px;
-    padding: 8px 6px;
-    font-size: 12px;
-    font-family: inherit;
-    background: white;
-    color: var(--mid);
-    flex: 1 1 130px;
-    min-width: 0;
-  }
-
-  .map-hint {
-    font-size: 11.5px;
-    color: #999;
-    line-height: 1.3;
-    margin-bottom: 8px;
-  }
-
-  .map-credit {
-    font-size: 10px;
-    color: #aaa;
-    margin-top: 4px;
-    line-height: 1.3;
+    position: relative;
+    margin: 0 var(--s3);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--e2);
+    isolation: isolate;
   }
 
   #yard-map {
     width: 100%;
-    height: 300px;
-    border-radius: var(--radius);
-    background: #e8e8e6;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    overflow: hidden;
+    height: 46vh;
+    min-height: 280px;
+    max-height: 480px;
+    background: var(--surface-2);
   }
 
-  #yard-map.tap-armed {
-    box-shadow: 0 0 0 3px var(--green-light);
-    cursor: crosshair;
+  /* Shared look for every floating control. */
+  .map-ctrl {
+    background: var(--map-ctrl);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    width: var(--tap);
+    height: var(--tap);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: var(--e1);
+    -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(6px);
+    transition: background .15s, color .15s, transform .1s;
   }
+
+  .map-ctrl:active { transform: scale(0.92); }
+
+  .map-ctrl.on {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+  }
+
+  #lock-btn.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #2b2200;
+  }
+
+  #map-tools {
+    position: absolute;
+    top: calc(var(--tap) + var(--s3) + var(--s2));
+    left: var(--s2);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+  }
+
+  #imagery-ctrl { position: relative; overflow: hidden; }
+
+  /* Native picker, invisible over the icon — keeps the OS wheel on mobile
+     without a custom menu to maintain. */
+  #imagery-select {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    font-size: 16px; /* iOS zooms the page for anything smaller */
+    font-family: inherit;
+    border: none;
+    cursor: pointer;
+  }
+
+  #map-search-bar {
+    position: absolute;
+    top: var(--s2);
+    left: var(--s2);
+    right: var(--s2);
+    z-index: 10;
+    display: flex;
+    gap: var(--s2);
+  }
+
+  #map-search-input {
+    flex: 1;
+    min-width: 0;
+    height: var(--tap);
+    padding: 0 var(--s3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    font-size: 16px;
+    font-family: inherit;
+    background: var(--map-ctrl);
+    color: var(--text);
+    box-shadow: var(--e1);
+    backdrop-filter: blur(6px);
+  }
+
+  #map-search-input::placeholder { color: var(--text-faint); }
+
+  #map-search-input:focus {
+    outline: none;
+    border-color: var(--brand-hi);
+    box-shadow: 0 0 0 3px var(--brand-wash);
+  }
+
+  /* Shown only while tap mode is armed — a permanent caption over the map is
+     just something covering the yard you're trying to trace. Kept clear of
+     the zoom buttons in the opposite corner. */
+  .map-hint {
+    display: none;
+    position: absolute;
+    left: var(--s2);
+    bottom: var(--s2);
+    max-width: 62%;
+    z-index: 10;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: #fff;
+    background: rgba(0,0,0,.62);
+    padding: 6px var(--s2);
+    border-radius: var(--r-sm);
+    line-height: 1.3;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+  }
+
+  #yard-map.tap-armed ~ .map-hint { display: block; }
+
+  /* Attribution is a licence condition, not decoration — it has to be legible. */
+  .map-credit {
+    font-size: var(--t-xs);
+    color: var(--text-dim);
+    padding: var(--s1) var(--s4) 0;
+    line-height: 1.3;
+  }
+
+  /* State is shown as an inset ring so it can't be mistaken for the border of
+     the card itself. */
+  #yard-map.locked { box-shadow: inset 0 0 0 3px var(--accent); }
+  #yard-map.tap-armed { box-shadow: inset 0 0 0 3px var(--brand-hi); cursor: crosshair; }
+  #yard-map.locked.tap-armed { box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 0 6px var(--brand-hi); }
+
+  /* STICKY ACTION BAR */
+  #action-bar {
+    z-index: 55;
+    padding: var(--s2) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom, 0px));
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+  }
+
+  #action-bar .btn-primary { width: 100%; }
 
   /* MapLibre paints its own attribution block; ours lives under the map. */
   .maplibregl-ctrl-attrib { display: none !important; }
@@ -903,9 +1226,9 @@
     letter-spacing: 0.3px;
   }
 
-  .acc-good { background: #e8f5e8; color: #2d6a2d; }
-  .acc-ok { background: #fff8e1; color: #f57f17; }
-  .acc-poor { background: #fce4e4; color: #c0392b; }
+  .acc-good { background: var(--brand-wash); color: var(--brand); }
+  .acc-ok { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--accent); }
+  .acc-poor { background: var(--danger-wash); color: var(--danger); }
 
   /* toast */
   #toast {
@@ -933,60 +1256,128 @@
 </head>
 <body>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 6v13h13"/><path d="M3 6l7 0M3 11h4M3 16h4M8 19v-4M13 19v-4"/><path d="M3 6l13 13" opacity=".45"/></symbol>
+  <symbol id="i-jobs" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 13a8.5 8.5 0 0 1-10-10 8.5 8.5 0 1 0 10 10z"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10H9"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+  <symbol id="i-tap" viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M12 11V9.5a1.5 1.5 0 0 1 3 0V12"/><path d="M15 12v-1a1.5 1.5 0 0 1 3 0v5a5 5 0 0 1-5 5h-1.6a5 5 0 0 1-3.9-1.9L5 15.5a1.6 1.6 0 0 1 2.4-2.1L9 15"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h18M3 15h18M9 3v18M15 3v18"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></symbol>
+  <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L20 8l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>
+  <symbol id="i-dup" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></symbol>
+  <symbol id="i-area" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 4l16 16" opacity=".35"/></symbol>
+  <symbol id="i-cut" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 12h8"/></symbol>
+  <symbol id="i-run" viewBox="0 0 24 24"><path d="M4 18L20 6"/><circle cx="4" cy="18" r="2.3"/><circle cx="20" cy="6" r="2.3"/></symbol>
+  <symbol id="i-install" viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 19h16"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 9v5M12 17h.01"/></symbol>
+</defs></svg>
+
 <header>
-  <div class="logo">📐</div>
-  <div class="header-text">
-    <h1>Yard Measure</h1>
-    <p>Walk it or tap the map · Get area</p>
-  </div>
-  <button id="jobs-btn" type="button">📁 Jobs</button>
+  <svg class="ic ic-lg logo"><use href="#i-logo"/></svg>
+  <h1>Yard Measure</h1>
+  <button id="theme-btn" class="hdr-btn" type="button" title="Display mode">
+    <svg class="ic"><use href="#i-auto" id="theme-icon"/></svg>
+  </button>
+  <button id="jobs-btn" class="hdr-btn" type="button" title="Saved jobs">
+    <svg class="ic"><use href="#i-jobs"/></svg><span>Jobs</span>
+  </button>
 </header>
 
 <div id="jobs-overlay">
   <div id="jobs-sheet">
     <div class="sheet-head">
       <span class="sheet-title">Saved jobs</span>
-      <button class="sheet-close" id="jobs-close" type="button">×</button>
+      <button class="sheet-close" id="jobs-close" type="button" title="Close"><svg class="ic ic-lg"><use href="#i-x"/></svg></button>
     </div>
-    <button class="btn btn-secondary" id="new-job-btn" type="button">+ Start a new job</button>
-    <button class="btn btn-secondary" id="install-btn" type="button" style="display:none;margin-top:8px;">⤓ Add to home screen</button>
+    <button class="btn btn-secondary" id="new-job-btn" type="button">
+      <svg class="ic"><use href="#i-plus"/></svg> Start a new job
+    </button>
+    <button class="btn btn-secondary" id="install-btn" type="button" style="display:none;margin-top:8px;">
+      <svg class="ic"><use href="#i-install"/></svg> Add to home screen
+    </button>
     <div id="jobs-list"></div>
     <p class="sheet-note" id="offline-note">Every job saves itself as you measure. Tap one to reopen it.</p>
   </div>
 </div>
 
+<!-- The result was 271px of always-on chrome sitting between the status bar
+     and the map. Collapsed to a single tappable line; the detail is still one
+     tap away, but it no longer pushes the map off the first screen. -->
+<button id="result-area" type="button" aria-expanded="false">
+  <div class="result-head">
+    <div class="result-headline">
+      <span class="result-number" id="result-sqft">—</span>
+      <span class="result-unit" id="result-unit">square feet</span>
+    </div>
+    <span class="result-label" id="result-label">Estimated Area</span>
+    <svg class="ic result-chev"><use href="#i-chev-down"/></svg>
+  </div>
+  <div class="result-detail">
+    <div class="result-range" id="result-range"></div>
+    <div class="result-secondary" id="result-extra"></div>
+    <div class="result-total" id="result-total"></div>
+  </div>
+</button>
+<div class="result-warning" id="result-warning">
+  <svg class="ic ic-sm"><use href="#i-warn"/></svg>
+  <span>Pins may be out of order — shape crosses itself, area could be wrong</span>
+</div>
+<div class="result-warning" id="cut-warning"></div>
+
+<!-- GPS state sits directly above the map, where it's relevant, rather than
+     splitting the two green bands apart. -->
 <div id="status-bar">
   <div class="status-dot" id="gps-dot"></div>
   <span id="gps-status">Waiting for GPS permission…</span>
 </div>
 
-<div id="result-area">
-  <div class="result-label" id="result-label">Estimated Area</div>
-  <div class="result-number" id="result-sqft">—</div>
-  <div class="result-unit" id="result-unit">square feet</div>
-  <div class="result-range" id="result-range"></div>
-  <div class="result-secondary" id="result-extra"></div>
-  <div class="result-total" id="result-total"></div>
-</div>
-<div class="result-warning" id="result-warning">⚠️ Pins may be out of order — shape crosses itself, area could be wrong</div>
-<div class="result-warning" id="cut-warning"></div>
-
+<main id="scroll-area">
 <div id="map-wrap">
+  <div id="yard-map"></div>
+
+  <!-- Controls live on the map, the way every map app does it — this bought
+       back two stacked rows of chrome above it. -->
   <div id="map-search-bar">
     <input type="text" id="map-search-input" placeholder="Search address or job site…">
-    <button id="map-search-btn" type="button">🔍</button>
+    <button id="map-search-btn" class="map-ctrl" type="button" title="Search">
+      <svg class="ic"><use href="#i-search"/></svg>
+    </button>
   </div>
-  <div id="map-toolbar">
-    <button id="tap-mode-btn" type="button">👆 Tap to add</button>
-    <button id="lock-btn" type="button">🔓 Lock map</button>
 
-    <button id="parcel-btn" type="button">▦ Lot lines</button>
-    <select id="imagery-select" title="Aerial imagery source"></select>
+  <div id="map-tools">
+    <button id="tap-mode-btn" class="map-ctrl" type="button" title="Tap the map to add corners">
+      <svg class="ic"><use href="#i-tap"/></svg>
+    </button>
+    <button id="lock-btn" class="map-ctrl" type="button" title="Lock the map">
+      <svg class="ic"><use href="#i-unlock" id="lock-icon"/></svg>
+    </button>
+    <button id="parcel-btn" class="map-ctrl" type="button" title="Show lot lines">
+      <svg class="ic"><use href="#i-grid"/></svg>
+    </button>
+    <label class="map-ctrl" id="imagery-ctrl" title="Aerial imagery source">
+      <svg class="ic"><use href="#i-layers"/></svg>
+      <select id="imagery-select"></select>
+    </label>
   </div>
+
   <div class="map-hint" id="map-hint">Drag any numbered pin to nudge a corner.</div>
-  <div id="yard-map"></div>
-  <div class="map-credit" id="map-credit"></div>
 </div>
+<div class="map-credit" id="map-credit"></div>
 
 <div id="zones-section">
   <div class="section-header">
@@ -1021,25 +1412,33 @@
 </div>
 
 <div id="controls">
-  <button class="btn btn-primary" id="pin-btn" disabled>
-    <span>📍</span> Drop Pin Here
-  </button>
   <div class="btn-row">
     <button class="btn btn-secondary" id="undo-btn" disabled>
-      ↩ Undo Pin
+      <svg class="ic"><use href="#i-undo"/></svg> Undo Pin
     </button>
     <button class="btn btn-danger" id="clear-btn">
-      🗑 Clear Zone
+      <svg class="ic"><use href="#i-trash"/></svg> Clear Zone
     </button>
   </div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="snapshot-btn" disabled>
-      📤 Snapshot
+      <svg class="ic"><use href="#i-share"/></svg> Snapshot
     </button>
     <button class="btn btn-secondary" id="copy-btn" disabled>
-      📋 Copy
+      <svg class="ic"><use href="#i-copy"/></svg> Copy
     </button>
   </div>
+</div>
+
+</main>
+
+<!-- Primary action pinned to the bottom of the viewport. Previously it sat at
+     1522px on an 812px screen, so the map and the button could never be seen
+     together — the single worst thing about using this on a phone. -->
+<div id="action-bar">
+  <button class="btn btn-primary" id="pin-btn" disabled>
+    <svg class="ic ic-lg"><use href="#i-pin"/></svg> Drop Pin Here
+  </button>
 </div>
 
 <div id="toast"></div>
@@ -1063,7 +1462,11 @@
     mapLocked: false,
     jobId: null,
     jobStarted: null,
+    theme: 'auto',
+    resultOpen: false,
   };
+
+  const icon = (id, cls) => `<svg class="ic ${cls || ''}"><use href="#i-${id}"/></svg>`;
 
   const STALE_MS = 6000;
   const AVERAGE_WINDOW_MS = 4000;
@@ -1138,7 +1541,7 @@
   const isCut = z => z.mode === 'cut';
   const isLine = z => z.mode === 'line';
   const MODES = ['area', 'cut', 'line'];
-  const MODE_ICON = { area: '🟩', cut: '🟥', line: '📏' };
+  const MODE_ICON = { area: 'area', cut: 'cut', line: 'run' };
   const MODE_NOUN = { area: 'measured area', cut: 'cut-out', line: 'linear run' };
   // A run needs two ends; a shape needs three corners.
   const minPins = z => (isLine(z) ? 2 : 3);
@@ -1218,15 +1621,22 @@
       else if (line) label = `${Math.round(zoneLenFt(z)).toLocaleString()} ft`;
       else label = `${cut ? '−' : ''}${Math.round(cut ? zoneSqft(z) : zoneNetSqft(z)).toLocaleString()} ft²`;
       const acts = active
-        ? `<button class="chip-act" data-act="mode" title="Switch between area, cut-out and run">${MODE_ICON[z.mode] || MODE_ICON.area}</button>` +
-          `<button class="chip-act" data-act="rename" title="Rename">✏️</button>` +
-          (n > 1 ? `<button class="chip-act" data-act="delete" title="Delete zone">×</button>` : '')
+        ? `<button class="chip-act" data-act="mode" title="Switch between area, cut-out and run">${icon(MODE_ICON[z.mode] || MODE_ICON.area, 'ic-sm')}</button>` +
+          `<button class="chip-act" data-act="rename" title="Rename">${icon('edit','ic-sm')}</button>` +
+          (n > 1 ? `<button class="chip-act" data-act="delete" title="Delete zone">${icon('x','ic-sm')}</button>` : '')
         : '';
-      return `<button class="zone-chip ${active ? 'active' : ''} ${cut ? 'cut' : ''} ${line ? 'line' : ''}" data-zone="${z.id}">
-        <span>${escapeHtml(z.name)}</span><span class="zone-area">${label}</span>${acts}
-      </button>`;
+      // The chip is a div, not a button. Nesting the action buttons inside a
+      // button is invalid HTML: the parser closes the outer one and hoists
+      // them out as siblings, which broke the closest('.zone-chip') lookup the
+      // click handler depends on — so mode/rename/delete did nothing.
+      return `<div class="zone-chip ${active ? 'active' : ''} ${cut ? 'cut' : ''} ${line ? 'line' : ''}" data-zone="${z.id}">
+        <button class="zone-pick" type="button">
+          <span>${escapeHtml(z.name)}</span><span class="zone-area">${label}</span>
+        </button>${acts}
+      </div>`;
     }).join('');
-    zoneTabs.innerHTML = chips + `<button class="zone-chip add" data-act="add">+ Zone</button>`;
+    zoneTabs.innerHTML = chips +
+      `<button class="zone-chip add" type="button" data-act="add">${icon('plus','ic-sm')} Zone</button>`;
   }
 
   zoneTabs.addEventListener('click', (e) => {
@@ -1479,10 +1889,10 @@
           </div>
         </div>
         <div class="point-actions">
-          <button data-act="up" title="Move earlier" ${i === 0 ? 'disabled' : ''}>▲</button>
-          <button data-act="down" title="Move later" ${i === pins.length - 1 ? 'disabled' : ''}>▼</button>
-          <button data-act="insert" title="Add a point on the next edge" ${pins.length < 2 ? 'disabled' : ''}>＋</button>
-          <button data-act="remove" class="act-remove" title="Delete">×</button>
+          <button data-act="up" title="Move earlier" ${i === 0 ? 'disabled' : ''}>${icon('up','ic-sm')}</button>
+          <button data-act="down" title="Move later" ${i === pins.length - 1 ? 'disabled' : ''}>${icon('down','ic-sm')}</button>
+          <button data-act="insert" title="Add a point on the next edge" ${pins.length < 2 ? 'disabled' : ''}>${icon('plus','ic-sm')}</button>
+          <button data-act="remove" class="act-remove" title="Delete">${icon('x','ic-sm')}</button>
         </div>
       </div>
     `).join('');
@@ -1747,8 +2157,8 @@
     if (orphans.length || dblCuts.length) {
       cutWarning.style.display = 'block';
       cutWarning.innerHTML = orphans.length
-        ? `⚠️ ${orphans.map(o => escapeHtml(o.name)).join(', ')} ${orphans.length > 1 ? 'are' : 'is'} set to cut out but ${orphans.length > 1 ? 'sit' : 'sits'} outside every measured area — nothing is being subtracted`
-        : `⚠️ ${dblCuts.map(p => `${escapeHtml(p[0].name)} and ${escapeHtml(p[1].name)}`).join('; ')} overlap each other — the shared part is being subtracted twice`;
+        ? `${icon('warn','ic-sm')} ${orphans.map(o => escapeHtml(o.name)).join(', ')} ${orphans.length > 1 ? 'are' : 'is'} set to cut out but ${orphans.length > 1 ? 'sit' : 'sits'} outside every measured area — nothing is being subtracted`
+        : `${icon('warn','ic-sm')} ${dblCuts.map(p => `${escapeHtml(p[0].name)} and ${escapeHtml(p[1].name)}`).join('; ')} overlap each other — the shared part is being subtracted twice`;
     } else {
       cutWarning.style.display = 'none';
     }
@@ -1935,7 +2345,7 @@
       <div class="layer-item" data-id="${l.id}">
         <div class="layer-row1">
           <input type="text" class="layer-material" placeholder="${line ? 'Material (e.g. steel edging)' : 'Material (e.g. D-1 base)'}" value="${escapeAttr(l.material)}" maxlength="40">
-          <button class="remove-btn layer-remove">×</button>
+          <button class="remove-btn layer-remove" title="Remove">${icon('x','ic-sm')}</button>
         </div>
         ${line ? '' : `
         <div class="layer-row2">
@@ -2092,7 +2502,8 @@
         // WebGL canvas; without it the buffer is cleared after compositing.
         preserveDrawingBuffer: true,
       });
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      // Bottom-right: top-right collides with the floating search bar.
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
       map.on('moveend', renderCredit);
       map.on('load', () => {
         mapReady = true;
@@ -2195,9 +2606,7 @@
     state.tapMode = !state.tapMode;
     tapModeBtn.classList.toggle('on', state.tapMode);
     mapEl.classList.toggle('tap-armed', state.tapMode);
-    mapHint.textContent = state.tapMode
-      ? 'Tap each corner in order around the yard. Drag a pin to nudge it.'
-      : 'Drag any numbered pin to nudge a corner.';
+    mapHint.textContent = 'Tap each corner in order. Drag a pin to nudge it.';
   });
 
   // ── LOT LINES ────────────────────────────────────────
@@ -2264,7 +2673,9 @@
   function setMapLocked(on) {
     state.mapLocked = on;
     lockBtn.classList.toggle('on', on);
-    lockBtn.textContent = on ? '🔒 Locked' : '🔓 Lock map';
+    const use = document.getElementById('lock-icon');
+    if (use) use.setAttribute('href', on ? '#i-lock' : '#i-unlock');
+    lockBtn.title = on ? 'Map locked — tap to unlock' : 'Lock the map';
     mapEl.classList.toggle('locked', on);
     applyLock();
     saveState();
@@ -2644,7 +3055,7 @@
     g.textAlign = 'left';
     g.fillStyle = '#ffffff';
     g.font = `700 44px ${F}`;
-    g.fillText('📐 Yard Measure', 40, 72);
+    g.fillText('Yard Measure', 40, 72);
     g.globalAlpha = 0.8;
     g.font = `400 22px ${F}`;
     g.fillText(new Date().toLocaleString(), 40, 112);
@@ -2974,6 +3385,8 @@
         mapLocked: state.mapLocked,
         jobId: state.jobId,
         jobStarted: state.jobStarted,
+        theme: state.theme,
+        resultOpen: state.resultOpen,
       }));
     } catch (e) { /* storage unavailable or full — not fatal */ }
     syncCurrentJob();
@@ -3013,8 +3426,48 @@
     if (saved.mapLocked) state.mapLocked = true;
     state.jobId = saved.jobId || null;
     state.jobStarted = saved.jobStarted || null;
+    if (saved.theme) state.theme = saved.theme;
+    if (saved.resultOpen) state.resultOpen = true;
     return true;
   }
+
+  // ── DISPLAY MODE ─────────────────────────────────────
+  // Auto follows the phone. Sun is a deliberate legibility mode for direct
+  // sunlight — maximum contrast, not a prettier dark/light variant — and it's
+  // one tap away because you decide you need it while standing outside.
+  const THEMES = ['auto', 'light', 'dark', 'sun'];
+  const THEME_ICON = { auto: '#i-auto', light: '#i-sun', dark: '#i-moon', sun: '#i-sun' };
+  const THEME_NAME = { auto: 'Follows your phone', light: 'Light', dark: 'Dark', sun: 'Sunlight — high contrast' };
+
+  function applyTheme() {
+    const t = state.theme || 'auto';
+    if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', t);
+    const use = document.getElementById('theme-icon');
+    if (use) use.setAttribute('href', THEME_ICON[t]);
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.classList.toggle('sun-on', t === 'sun');
+    // Keep the OS chrome in step with the page.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content',
+      getComputedStyle(document.documentElement).getPropertyValue('--brand').trim() || '#2d6a2d');
+  }
+
+  document.getElementById('theme-btn').addEventListener('click', () => {
+    state.theme = THEMES[(THEMES.indexOf(state.theme || 'auto') + 1) % THEMES.length];
+    applyTheme();
+    saveState();
+    showToast(THEME_NAME[state.theme]);
+  });
+
+  // ── RESULT BAR ───────────────────────────────────────
+  const resultArea = document.getElementById('result-area');
+  resultArea.addEventListener('click', () => {
+    const open = resultArea.getAttribute('aria-expanded') === 'true';
+    resultArea.setAttribute('aria-expanded', String(!open));
+    state.resultOpen = !open;
+    saveState();
+  });
 
   // ── OFFLINE / INSTALL ────────────────────────────────
   // Registered late and defensively: a failure here must never take the app
@@ -3260,8 +3713,8 @@
           <div class="job-name">${escapeHtml(j.name)}${j.id === state.jobId ? ' · open now' : ''}</div>
           <div class="job-meta">${bits.join(' · ')} · ${when}</div>
         </button>
-        <button class="job-act" data-dup="${j.id}" title="Duplicate">⧉</button>
-        <button class="job-act" data-del="${j.id}" title="Delete">🗑</button>
+        <button class="job-act" data-dup="${j.id}" title="Duplicate">${icon('dup')}</button>
+        <button class="job-act" data-del="${j.id}" title="Delete">${icon('trash')}</button>
       </div>`;
     }).join('');
   }
@@ -3332,6 +3785,8 @@
     state.jobId = 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     state.jobStarted = state.jobStarted || Date.now();
   }
+  applyTheme();
+  resultArea.setAttribute('aria-expanded', String(!!state.resultOpen));
   ensureZone();
   renderAll();
   if (restored) showToast('Restored your last job');
