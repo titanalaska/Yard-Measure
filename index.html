@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Yard Measure</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#2d6a2d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Yard Measure">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
 <style>
@@ -57,16 +63,152 @@
     margin-top: 1px;
   }
 
-  /* STATUS BAR */
-  #status-bar {
-    background: var(--dark);
+  #jobs-btn {
+    margin-left: auto;
+    background: rgba(255,255,255,0.15);
+    border: 1.5px solid rgba(255,255,255,0.5);
     color: white;
-    padding: 10px 20px;
+    border-radius: 20px;
+    padding: 9px 14px;
     font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #jobs-btn:active { opacity: 0.7; }
+
+  /* JOBS SHEET */
+  #jobs-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 200;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  #jobs-overlay.open { display: flex; }
+
+  #jobs-sheet {
+    background: var(--light);
+    width: 100%;
+    max-width: 560px;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: 18px 18px 0 0;
+    padding: 16px 16px 28px;
+    animation: sheetUp 0.2s ease;
+  }
+
+  @keyframes sheetUp {
+    from { transform: translateY(24px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .sheet-title { font-size: 17px; font-weight: 700; }
+
+  .sheet-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    color: var(--mid);
+    cursor: pointer;
+    padding: 0 6px;
+  }
+
+  .sheet-note {
+    font-size: 11.5px;
+    color: #999;
+    text-align: center;
+    margin-top: 14px;
+    line-height: 1.4;
+  }
+
+  #jobs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .job-row {
+    background: white;
+    border-radius: 10px;
+    padding: 12px 8px 12px 14px;
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 42px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .job-row.current {
+    border: 2px solid var(--green);
+    padding: 10px 6px 10px 12px;
+  }
+
+  .job-open {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .job-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--dark);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .job-meta { font-size: 11.5px; color: var(--mid); margin-top: 3px; }
+  .job-badge { color: var(--green); font-weight: 700; }
+  .job-badge.run { color: #1c6fb0; }
+
+  .job-act {
+    background: none;
+    border: none;
+    font-size: 16px;
+    width: 36px;
+    height: 40px;
+    border-radius: 6px;
+    color: #b0b0b0;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .job-act:active { background: #f0f0f0; }
+
+  /* STATUS BAR */
+  /* Read at arm's length, outdoors, in sun — so the accuracy figure is the
+     biggest thing in this bar, not the smallest. */
+  #status-bar {
+    background: var(--dark);
+    color: white;
+    padding: 10px 16px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
   }
 
   .status-dot {
@@ -266,6 +408,13 @@
   .zone-chip.cut.active {
     border-color: var(--red);
     background: #fdf2f1;
+  }
+
+  .zone-chip.line { color: #1c6fb0; }
+
+  .zone-chip.line.active {
+    border-color: #3aa0ff;
+    background: #eef6fd;
   }
 
   /* POINTS LIST */
@@ -740,10 +889,18 @@
   /* GPS accuracy badge */
   .accuracy-badge {
     display: inline-block;
-    padding: 2px 8px;
+    padding: 3px 11px;
     border-radius: 20px;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+  }
+
+  .accuracy-badge .acc-word {
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
+    opacity: 0.75;
+    letter-spacing: 0.3px;
   }
 
   .acc-good { background: #e8f5e8; color: #2d6a2d; }
@@ -782,7 +939,21 @@
     <h1>Yard Measure</h1>
     <p>Walk it or tap the map · Get area</p>
   </div>
+  <button id="jobs-btn" type="button">📁 Jobs</button>
 </header>
+
+<div id="jobs-overlay">
+  <div id="jobs-sheet">
+    <div class="sheet-head">
+      <span class="sheet-title">Saved jobs</span>
+      <button class="sheet-close" id="jobs-close" type="button">×</button>
+    </div>
+    <button class="btn btn-secondary" id="new-job-btn" type="button">+ Start a new job</button>
+    <button class="btn btn-secondary" id="install-btn" type="button" style="display:none;margin-top:8px;">⤓ Add to home screen</button>
+    <div id="jobs-list"></div>
+    <p class="sheet-note" id="offline-note">Every job saves itself as you measure. Tap one to reopen it.</p>
+  </div>
+</div>
 
 <div id="status-bar">
   <div class="status-dot" id="gps-dot"></div>
@@ -792,7 +963,7 @@
 <div id="result-area">
   <div class="result-label" id="result-label">Estimated Area</div>
   <div class="result-number" id="result-sqft">—</div>
-  <div class="result-unit">square feet</div>
+  <div class="result-unit" id="result-unit">square feet</div>
   <div class="result-range" id="result-range"></div>
   <div class="result-secondary" id="result-extra"></div>
   <div class="result-total" id="result-total"></div>
@@ -861,9 +1032,14 @@
       🗑 Clear Zone
     </button>
   </div>
-  <button class="btn btn-secondary" id="snapshot-btn" disabled>
-    📤 Save Snapshot
-  </button>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="snapshot-btn" disabled>
+      📤 Snapshot
+    </button>
+    <button class="btn btn-secondary" id="copy-btn" disabled>
+      📋 Copy
+    </button>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -885,6 +1061,8 @@
     stale: false,
     tapMode: false,
     mapLocked: false,
+    jobId: null,
+    jobStarted: null,
   };
 
   const STALE_MS = 6000;
@@ -905,6 +1083,7 @@
   const gpsStatus = document.getElementById('gps-status');
   const resultLabel = document.getElementById('result-label');
   const resultSqft = document.getElementById('result-sqft');
+  const resultUnit = document.getElementById('result-unit');
   const resultExtra = document.getElementById('result-extra');
   const resultRange = document.getElementById('result-range');
   const resultTotal = document.getElementById('result-total');
@@ -915,6 +1094,7 @@
   const zoneTabs = document.getElementById('zone-tabs');
   const zoneCountEl = document.getElementById('zone-count');
   const snapshotBtn = document.getElementById('snapshot-btn');
+  const copyBtn = document.getElementById('copy-btn');
   const jobLabelInput = document.getElementById('job-label');
   const layersSection = document.getElementById('layers-section');
   const layersList = document.getElementById('layers-list');
@@ -953,17 +1133,39 @@
     if (!state.zones.some(z => z.id === state.activeZoneId)) state.activeZoneId = state.zones[0].id;
   }
 
+  // 'area' measures ground, 'cut' is a hole punched out of it, 'line' is an
+  // open run — edging, fence, curb, retaining wall — sold by the foot.
   const isCut = z => z.mode === 'cut';
+  const isLine = z => z.mode === 'line';
+  const MODES = ['area', 'cut', 'line'];
+  const MODE_ICON = { area: '🟩', cut: '🟥', line: '📏' };
+  const MODE_NOUN = { area: 'measured area', cut: 'cut-out', line: 'linear run' };
+  // A run needs two ends; a shape needs three corners.
+  const minPins = z => (isLine(z) ? 2 : 3);
+  const isDrawn = z => z.pins.length >= minPins(z);
+
+  // Open path length — a run does not close back on itself the way a
+  // perimeter does.
+  function pathLengthM(pins) {
+    if (pins.length < 2) return 0;
+    const pts = project(pins);
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    return len;
+  }
+
+  const zoneLenFt = z => pathLengthM(z.pins) * M_TO_FT;
 
   // Gross: the shape as walked, before anything is taken out of it.
+  // A run has no area at all.
   function zoneSqft(z) {
-    return calcAreaSqm(z.pins) * 10.7639;
+    return isLine(z) ? 0 : calcAreaSqm(z.pins) * 10.7639;
   }
 
   // What each cut-out actually removes from this zone — the real overlap, so
   // a driveway half in and half out only takes off the half that's in.
   function cutoutsFor(zone) {
-    if (isCut(zone) || zone.pins.length < 3) return [];
+    if (isCut(zone) || isLine(zone) || zone.pins.length < 3) return [];
     return state.zones
       .filter(z => isCut(z) && z.pins.length >= 3)
       .map(z => ({ zone: z, sqft: overlapSqm(zone.pins, z.pins) * 10.7639 }))
@@ -972,7 +1174,7 @@
 
   // Net: what you actually order material for.
   function zoneNetSqft(z) {
-    if (isCut(z)) return 0; // a hole contributes through its parent, never on its own
+    if (isCut(z) || isLine(z)) return 0; // a hole contributes through its parent; a run has no area
     const cut = cutoutsFor(z).reduce((s, c) => s + c.sqft, 0);
     return Math.max(0, zoneSqft(z) - cut);
   }
@@ -986,7 +1188,12 @@
   function orphanCuts() {
     return state.zones.filter(z =>
       isCut(z) && z.pins.length >= 3 &&
-      !state.zones.some(a => !isCut(a) && a.pins.length >= 3 && overlapSqm(a.pins, z.pins) > 0.5));
+      !state.zones.some(a => a.mode === 'area' && a.pins.length >= 3 && overlapSqm(a.pins, z.pins) > 0.5));
+  }
+
+  // Total run length across every line zone, for the job summary.
+  function jobLinearFt() {
+    return state.zones.filter(z => isLine(z) && isDrawn(z)).reduce((s, z) => s + zoneLenFt(z), 0);
   }
 
   // Two cuts covering the same ground would each be subtracted in full, so the
@@ -1005,18 +1212,18 @@
     zoneCountEl.textContent = `${n} zone${n !== 1 ? 's' : ''}`;
     const chips = state.zones.map(z => {
       const active = z.id === state.activeZoneId;
-      const cut = isCut(z);
-      const sqft = cut ? zoneSqft(z) : zoneNetSqft(z);
-      const area = z.pins.length >= 3
-        ? `${cut ? '−' : ''}${Math.round(sqft).toLocaleString()} ft²`
-        : `${z.pins.length} pin${z.pins.length !== 1 ? 's' : ''}`;
+      const cut = isCut(z), line = isLine(z);
+      let label;
+      if (!isDrawn(z)) label = `${z.pins.length} pin${z.pins.length !== 1 ? 's' : ''}`;
+      else if (line) label = `${Math.round(zoneLenFt(z)).toLocaleString()} ft`;
+      else label = `${cut ? '−' : ''}${Math.round(cut ? zoneSqft(z) : zoneNetSqft(z)).toLocaleString()} ft²`;
       const acts = active
-        ? `<button class="chip-act" data-act="mode" title="${cut ? 'Make this measured area' : 'Make this a cut-out'}">${cut ? '⊖' : '⊕'}</button>` +
+        ? `<button class="chip-act" data-act="mode" title="Switch between area, cut-out and run">${MODE_ICON[z.mode] || MODE_ICON.area}</button>` +
           `<button class="chip-act" data-act="rename" title="Rename">✏️</button>` +
           (n > 1 ? `<button class="chip-act" data-act="delete" title="Delete zone">×</button>` : '')
         : '';
-      return `<button class="zone-chip ${active ? 'active' : ''} ${cut ? 'cut' : ''}" data-zone="${z.id}">
-        <span>${escapeHtml(z.name)}</span><span class="zone-area">${area}</span>${acts}
+      return `<button class="zone-chip ${active ? 'active' : ''} ${cut ? 'cut' : ''} ${line ? 'line' : ''}" data-zone="${z.id}">
+        <span>${escapeHtml(z.name)}</span><span class="zone-area">${label}</span>${acts}
       </button>`;
     }).join('');
     zoneTabs.innerHTML = chips + `<button class="zone-chip add" data-act="add">+ Zone</button>`;
@@ -1039,15 +1246,19 @@
     if (!zone) return;
 
     if (act === 'mode') {
-      zone.mode = isCut(zone) ? 'area' : 'cut';
+      const was = zone.mode;
+      zone.mode = MODES[(MODES.indexOf(zone.mode) + 1) % MODES.length];
       // A cut-out is a hole in the ground, not ground of its own — it can't
-      // carry its own material order.
-      if (isCut(zone)) zone.layers = [];
+      // carry its own material order. Switching between area and run changes
+      // what a layer even means (volume vs. length), so those clear too.
+      if (isCut(zone) || (was !== zone.mode && zone.layers.length)) zone.layers = [];
       renderAll();
       saveState();
       showToast(isCut(zone)
         ? `"${zone.name}" now cuts out of whatever contains it`
-        : `"${zone.name}" now adds area`);
+        : isLine(zone)
+          ? `"${zone.name}" is now a run — measured by the foot`
+          : `"${zone.name}" now adds area`);
       return;
     }
     if (act === 'rename') {
@@ -1113,7 +1324,7 @@
     const cls = ft < 10 ? 'acc-good' : ft < 25 ? 'acc-ok' : 'acc-poor';
     const label = ft < 10 ? 'Excellent' : ft < 25 ? 'Good' : 'Low';
     setStatus(
-      `GPS locked · <span class="accuracy-badge ${cls}">±${Math.round(ft)} ft – ${label}</span>`,
+      `<span class="accuracy-badge ${cls}">±${Math.round(ft)} ft <span class="acc-word">${label.toUpperCase()}</span></span>`,
       'green'
     );
   }
@@ -1445,24 +1656,62 @@
     return Math.sqrt(variance);
   }
 
+  // Same first-order propagation as the area band, applied to an open run.
+  // dL/dp_i is the difference of the unit vectors either side of a vertex, so
+  // a vertex sitting mid-way along a straight stretch contributes nothing —
+  // sliding it along the line doesn't change the total — while the two ends
+  // and every real corner do.
+  function runSigmaM(pins) {
+    if (pins.length < 2) return 0;
+    const pts = project(pins);
+    const unit = (a, b) => {
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+      return { x: dx / d, y: dy / d };
+    };
+    let variance = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const uPrev = i > 0 ? unit(pts[i - 1], pts[i]) : null;
+      const uNext = i < pts.length - 1 ? unit(pts[i], pts[i + 1]) : null;
+      const gx = (uPrev ? uPrev.x : 0) - (uNext ? uNext.x : 0);
+      const gy = (uPrev ? uPrev.y : 0) - (uNext ? uNext.y : 0);
+      const sigma = pts[i].acc * ACC_TO_SIGMA;
+      variance += sigma * sigma * (gx * gx + gy * gy);
+    }
+    return Math.sqrt(variance);
+  }
+
   function renderResult() {
     const z = activeZone();
-    const cut = isCut(z);
+    const cut = isCut(z), line = isLine(z);
     const grossSqft = zoneSqft(z);
     const cuts = cutoutsFor(z);
     const netSqft = cut ? grossSqft : zoneNetSqft(z);
     const multi = state.zones.length > 1;
 
-    resultLabel.textContent = cut
-      ? `${z.name} — Cut-out`
+    resultLabel.textContent = cut ? `${z.name} — Cut-out`
+      : line ? `${z.name} — Run Length`
       : multi ? `${z.name} — Estimated Area` : 'Estimated Area';
+    resultUnit.textContent = line ? 'linear feet' : 'square feet';
 
-    if (z.pins.length < 3) {
+    if (!isDrawn(z)) {
       resultSqft.textContent = '—';
       resultRange.innerHTML = '';
       resultExtra.innerHTML = '';
       resultWarning.style.display = 'none';
       layersSection.style.display = 'none';
+    } else if (line) {
+      // A run is measured end to end and never closes, so there is no area,
+      // no shoelace error band and no self-intersection to worry about.
+      const ft = zoneLenFt(z);
+      resultSqft.textContent = Math.round(ft).toLocaleString();
+      const sigmaFt = runSigmaM(z.pins) * M_TO_FT;
+      resultRange.innerHTML = `Range: <span>${Math.max(0, Math.round(ft - 2 * sigmaFt)).toLocaleString()}</span> – <span>${Math.round(ft + 2 * sigmaFt).toLocaleString()}</span> ft`;
+      resultExtra.innerHTML = [
+        `${(ft / 3).toFixed(1)} yd`,
+        `${z.pins.length - 1} segment${z.pins.length - 1 !== 1 ? 's' : ''}`,
+      ].join(' &nbsp;·&nbsp; ');
+      resultWarning.style.display = 'none';
+      layersSection.style.display = 'block';
     } else {
       resultSqft.textContent = `${cut ? '−' : ''}${Math.round(netSqft).toLocaleString()}`;
 
@@ -1505,11 +1754,15 @@
     }
 
     if (multi) {
-      const areas = state.zones.filter(x => !isCut(x) && x.pins.length >= 3).length;
-      const nCuts = state.zones.filter(x => isCut(x) && x.pins.length >= 3).length;
-      resultTotal.style.display = 'block';
-      resultTotal.innerHTML = `Job total <b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> across ${areas} measured area${areas !== 1 ? 's' : ''}`
-        + (nCuts ? `, ${nCuts} cut-out${nCuts !== 1 ? 's' : ''} removed` : '');
+      const areas = state.zones.filter(x => x.mode === 'area' && isDrawn(x)).length;
+      const nCuts = state.zones.filter(x => isCut(x) && isDrawn(x)).length;
+      const nRuns = state.zones.filter(x => isLine(x) && isDrawn(x)).length;
+      const bits = [];
+      if (areas) bits.push(`<b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> across ${areas} area${areas !== 1 ? 's' : ''}`
+        + (nCuts ? `, ${nCuts} cut-out${nCuts !== 1 ? 's' : ''} removed` : ''));
+      if (nRuns) bits.push(`<b>${Math.round(jobLinearFt()).toLocaleString()} ft</b> of run across ${nRuns}`);
+      resultTotal.style.display = bits.length ? 'block' : 'none';
+      resultTotal.innerHTML = bits.length ? `Job total ${bits.join('<br>')}` : '';
     } else {
       resultTotal.style.display = 'none';
     }
@@ -1565,6 +1818,15 @@
   // and density are both optional per layer — density mainly matters for
   // topsoil, where it swings a lot; other materials are fairly standard so
   // crews can just leave it blank and skip the tons conversion.
+  // A run is bought by the foot, not the yard³ — edging, fence, curb. Same
+  // waste allowance, different unit, no depth or density to fill in.
+  function layerLength(l, lenFt) {
+    if (!lenFt) return null;
+    const wastePct = parseFloat(l.wastePct);
+    const ft = wastePct > 0 ? lenFt * (1 + wastePct / 100) : lenFt;
+    return { ft };
+  }
+
   function layerVolume(l, areaSqft) {
     const depth = parseFloat(l.depth);
     if (!areaSqft || !depth || depth <= 0) return null;
@@ -1642,7 +1904,12 @@
   // Material always comes off the NET area. Ordering topsoil for the footprint
   // of the house is the whole reason cut-outs exist.
   function volumeLabel(l) {
-    const vol = layerVolume(l, zoneNetSqft(activeZone()));
+    const z = activeZone();
+    if (isLine(z)) {
+      const q = layerLength(l, zoneLenFt(z));
+      return q ? `${Math.ceil(q.ft).toLocaleString()} ft` : '—';
+    }
+    const vol = layerVolume(l, zoneNetSqft(z));
     if (!vol) return '—';
     let label = `${vol.cuyd.toFixed(2)} yd³`;
     if (vol.tons != null) label += ` · ${vol.tons.toFixed(1)}t`;
@@ -1650,19 +1917,27 @@
   }
 
   function renderLayers() {
-    const layers = activeZone().layers;
-    layersCountEl.textContent = `${layers.length} layer${layers.length !== 1 ? 's' : ''}`;
+    const z = activeZone();
+    const line = isLine(z);
+    const layers = z.layers;
+    layersCountEl.textContent = line
+      ? `${layers.length} item${layers.length !== 1 ? 's' : ''}`
+      : `${layers.length} layer${layers.length !== 1 ? 's' : ''}`;
     if (layers.length === 0) {
-      layersList.innerHTML = '<div class="empty-state">Add a layer to calculate material volume</div>';
+      layersList.innerHTML = `<div class="empty-state">${line
+        ? 'Add an item to work out how much to order by the foot'
+        : 'Add a layer to calculate material volume'}</div>`;
       layersTotalEl.style.display = 'none';
       return;
     }
+    // Depth, unit and density are meaningless on a run, so they aren't shown.
     layersList.innerHTML = layers.map(l => `
       <div class="layer-item" data-id="${l.id}">
         <div class="layer-row1">
-          <input type="text" class="layer-material" placeholder="Material (e.g. D-1 base)" value="${escapeAttr(l.material)}" maxlength="40">
+          <input type="text" class="layer-material" placeholder="${line ? 'Material (e.g. steel edging)' : 'Material (e.g. D-1 base)'}" value="${escapeAttr(l.material)}" maxlength="40">
           <button class="remove-btn layer-remove">×</button>
         </div>
+        ${line ? '' : `
         <div class="layer-row2">
           <input type="number" class="layer-depth" placeholder="Depth" value="${l.depth ?? ''}" min="0" step="0.25" inputmode="decimal">
           <select class="layer-unit">
@@ -1670,16 +1945,18 @@
             <option value="ft" ${l.unit === 'ft' ? 'selected' : ''}>feet</option>
           </select>
           <div class="layer-volume">${volumeLabel(l)}</div>
-        </div>
+        </div>`}
         <div class="layer-row3">
           <div class="layer-field">
             <input type="number" class="layer-waste" placeholder="0" value="${l.wastePct ?? ''}" min="0" step="1" inputmode="decimal">
             <span class="layer-field-suffix">% waste</span>
           </div>
-          <div class="layer-field">
+          ${line
+            ? `<div class="layer-volume">${volumeLabel(l)}</div>`
+            : `<div class="layer-field">
             <input type="number" class="layer-density" placeholder="—" value="${l.density ?? ''}" min="0" step="0.05" inputmode="decimal">
             <span class="layer-field-suffix">tons/yd³</span>
-          </div>
+          </div>`}
         </div>
       </div>
     `).join('');
@@ -1687,8 +1964,18 @@
   }
 
   function updateLayersTotal() {
-    const areaSqft = zoneNetSqft(activeZone());
-    const vols = activeZone().layers.map(l => layerVolume(l, areaSqft)).filter(Boolean);
+    const z = activeZone();
+    if (isLine(z)) {
+      const lens = z.layers.map(l => layerLength(l, zoneLenFt(z))).filter(Boolean);
+      if (!lens.length) { layersTotalEl.style.display = 'none'; return; }
+      layersTotalEl.style.display = 'block';
+      layersTotalEl.innerHTML = `${escapeHtml(z.name)}: ${lens.length} item${lens.length !== 1 ? 's' : ''} `
+        + `over ${Math.round(zoneLenFt(z)).toLocaleString()} ft of run`
+        + `<br>${Math.ceil(Math.max(...lens.map(q => q.ft))).toLocaleString()} ft to order (longest item, incl. waste)`;
+      return;
+    }
+    const areaSqft = zoneNetSqft(z);
+    const vols = z.layers.map(l => layerVolume(l, areaSqft)).filter(Boolean);
     if (vols.length === 0) {
       layersTotalEl.style.display = 'none';
       return;
@@ -1848,8 +2135,19 @@
     // pattern constant, which is supported.
     map.addLayer({
       id: 'yard-shape-line-other', type: 'line', source: 'yard-shape',
-      filter: ['all', ['!', ['get', 'active']], ['!', ['get', 'cut']]],
+      filter: ['all', ['!', ['get', 'active']], ['!', ['get', 'cut']], ['!', ['get', 'line']]],
       paint: { 'line-color': '#dddddd', 'line-width': 2, 'line-dasharray': [2, 2], 'line-opacity': 0.9 },
+    });
+    // Runs get their own heavier blue stroke — they read as a length of
+    // edging or fence, not the edge of a shape.
+    map.addLayer({
+      id: 'yard-shape-run', type: 'line', source: 'yard-shape',
+      filter: ['get', 'line'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': ['case', ['get', 'active'], '#3aa0ff', '#8fc7f0'],
+        'line-width': ['case', ['get', 'active'], 6, 4],
+      },
     });
     map.addLayer({
       id: 'yard-shape-line-cut', type: 'line', source: 'yard-shape',
@@ -1858,7 +2156,7 @@
     });
     map.addLayer({
       id: 'yard-shape-line', type: 'line', source: 'yard-shape',
-      filter: ['all', ['get', 'active'], ['!', ['get', 'cut']]],
+      filter: ['all', ['get', 'active'], ['!', ['get', 'cut']], ['!', ['get', 'line']]],
       paint: { 'line-color': '#2d6a2d', 'line-width': 3 },
     });
   }
@@ -2036,11 +2334,14 @@
     const features = state.zones.map(zone => {
       const coords = zone.pins.map(p => [p.lng, p.lat]);
       let geometry = null;
-      if (coords.length >= 3) geometry = { type: 'Polygon', coordinates: [[...coords, coords[0]]] };
+      // A run stays open however many pins it has; a shape closes at three.
+      if (isLine(zone)) geometry = coords.length >= 2 ? { type: 'LineString', coordinates: coords } : null;
+      else if (coords.length >= 3) geometry = { type: 'Polygon', coordinates: [[...coords, coords[0]]] };
       else if (coords.length === 2) geometry = { type: 'LineString', coordinates: coords };
       if (!geometry) return null;
       return { type: 'Feature',
-        properties: { active: zone.id === state.activeZoneId, cut: isCut(zone) }, geometry };
+        properties: { active: zone.id === state.activeZoneId, cut: isCut(zone), line: isLine(zone) },
+        geometry };
     }).filter(Boolean);
 
     const src = map.getSource('yard-shape');
@@ -2144,7 +2445,7 @@
   // Markers are DOM elements and never appear in the WebGL buffer, so they are
   // redrawn onto the snapshot canvas manually.
   async function captureMap() {
-    const measured = state.zones.filter(z => z.pins.length >= 3);
+    const measured = state.zones.filter(isDrawn);
     const framePins = measured.flatMap(z => z.pins);
     if (!mapReady || !map || framePins.length < 3) return null;
 
@@ -2177,6 +2478,7 @@
         .map(z => ({
           active: z.id === state.activeZoneId,
           cut: isCut(z),
+          line: isLine(z),
           pts: z.pins.map(p => {
             const q = map.project([p.lng, p.lat]);
             return { x: q.x * ratio, y: q.y * ratio };
@@ -2195,7 +2497,25 @@
     g.beginPath();
     g.moveTo(pts[0].x, pts[0].y);
     pts.slice(1).forEach(p => g.lineTo(p.x, p.y));
-    g.closePath();
+    // A run is an open path — closing it would draw a length of fence that
+    // isn't there and imply an area that doesn't exist.
+    if (!opts.open) g.closePath();
+    if (opts.open) {
+      g.save();
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      if (opts.halo) {
+        g.strokeStyle = 'rgba(0,0,0,0.45)';
+        g.lineWidth = opts.width + 5;
+        g.stroke();
+      }
+      g.strokeStyle = opts.stroke;
+      g.lineWidth = opts.width;
+      g.stroke();
+      g.restore();
+      if (opts.numbered) drawCorners(g, pts, opts);
+      return;
+    }
     g.fillStyle = opts.fill;
     g.fill();
     g.strokeStyle = opts.stroke;
@@ -2208,11 +2528,14 @@
       g.restore();
     }
     g.stroke();
-    if (!opts.numbered) return;
+    if (opts.numbered) drawCorners(g, pts, opts);
+  }
+
+  function drawCorners(g, pts, opts) {
     pts.forEach((p, i) => {
       g.beginPath();
       g.arc(p.x, p.y, opts.dot, 0, Math.PI * 2);
-      g.fillStyle = i === 0 ? '#c8a84b' : '#2d6a2d';
+      g.fillStyle = i === 0 ? '#c8a84b' : (opts.dotFill || '#2d6a2d');
       g.fill();
       g.strokeStyle = '#ffffff';
       g.lineWidth = 2;
@@ -2229,7 +2552,7 @@
   // Fallback for when the map can't be captured (offline, SDK blocked):
   // the original abstract outline, scaled into the same card.
   function drawAbstractShape(g, x, y, w, h) {
-    const zones = state.zones.filter(z => z.pins.length >= 3);
+    const zones = state.zones.filter(isDrawn);
     if (!zones.length) return;
     const all = zones.flatMap(z => z.pins);
     const pts = project(all).map(p => ({ x: p.x, y: -p.y }));
@@ -2249,9 +2572,11 @@
       }));
       const active = z.id === state.activeZoneId;
       drawPolygon(g, zPts, {
-        fill: active ? 'rgba(45,106,45,0.12)' : 'rgba(60,60,60,0.08)',
-        stroke: active ? '#2d6a2d' : '#999',
-        width: 3, dot: 11, numbered: active,
+        open: isLine(z),
+        fill: isCut(z) ? 'rgba(192,57,43,0.16)' : active ? 'rgba(45,106,45,0.12)' : 'rgba(60,60,60,0.08)',
+        stroke: isLine(z) ? '#1c6fb0' : isCut(z) ? '#c0392b' : active ? '#2d6a2d' : '#999',
+        width: isLine(z) ? 5 : 3, dot: 11, dotFill: '#1c6fb0',
+        numbered: active && !isCut(z),
       });
     });
   }
@@ -2261,10 +2586,11 @@
   }
 
   async function exportSnapshot() {
-    const drawn = state.zones.filter(z => z.pins.length >= 3);
-    const measured = drawn.filter(z => !isCut(z));
+    const drawn = state.zones.filter(isDrawn);
+    const measured = drawn.filter(z => z.mode === 'area');
     const cuts = drawn.filter(isCut);
-    if (!measured.length) { showToast('Need at least one measured area'); return; }
+    const runs = drawn.filter(isLine);
+    if (!measured.length && !runs.length) { showToast('Nothing measured yet'); return; }
     // Keyed off zones that actually have an area — a half-outlined second zone
     // shouldn't turn the card into a one-row "2 zones" breakdown.
     const multi = measured.length > 1;
@@ -2281,15 +2607,25 @@
         if (vol) materialRows.push({ zone: z.name, layer: l, vol });
       });
     });
+    runs.forEach(z => {
+      const lenFt = zoneLenFt(z);
+      z.layers.forEach(l => {
+        const q = layerLength(l, lenFt);
+        if (q) materialRows.push({ zone: z.name, layer: l, run: q });
+      });
+    });
 
     // Show the breakdown whenever there is arithmetic worth showing — more
-    // than one area, or anything taken out of one.
+    // than one area, or anything taken out of one. Runs are listed separately
+    // below, in feet, since they don't belong in a square-foot total.
     const zoneRows = (multi || cuts.length) ? measured.length + cuts.length + 1 : 0;
+    const runRows = runs.length ? runs.length + 1 : 0;
     const W = 1080;
     const cardH = 620;
     const headH = 150, resultH = 340;
     let H = headH + resultH + 40 + cardH + 60;
     if (zoneRows) H += 46 + zoneRows * 40 + 20;
+    if (runRows) H += 46 + runRows * 40 + 20;
     if (materialRows.length) H += 46 + materialRows.length * 42 + 60;
     H += 120; // footer
 
@@ -2328,34 +2664,49 @@
     g.globalAlpha = 0.7;
     g.fillStyle = '#ffffff';
     g.font = `700 24px ${F}`;
+    // A job of nothing but runs has no square footage to headline, so the
+    // total length takes the top slot instead.
+    const runOnly = !measured.length;
+    const headlineNum = runOnly
+      ? Math.round(runs.reduce((s, z) => s + zoneLenFt(z), 0))
+      : Math.round(totalSqft);
     g.fillText(
-      cuts.length
-        ? `NET AREA · ${cuts.length} CUT-OUT${cuts.length !== 1 ? 'S' : ''} REMOVED`
-        : multi ? `TOTAL AREA · ${measured.length} ZONES` : 'ESTIMATED AREA',
+      runOnly
+        ? `TOTAL RUN · ${runs.length} LENGTH${runs.length !== 1 ? 'S' : ''}`
+        : cuts.length
+          ? `NET AREA · ${cuts.length} CUT-OUT${cuts.length !== 1 ? 'S' : ''} REMOVED`
+          : multi ? `TOTAL AREA · ${measured.length} ZONES` : 'ESTIMATED AREA',
       W / 2, headH + 60);
     g.globalAlpha = 1;
 
     g.fillStyle = '#c8a84b';
     g.font = `800 140px ${F}`;
-    g.fillText(Math.round(totalSqft).toLocaleString(), W / 2, headH + 195);
+    g.fillText(headlineNum.toLocaleString(), W / 2, headH + 195);
 
     g.fillStyle = '#ffffff';
     g.globalAlpha = 0.9;
     g.font = `400 30px ${F}`;
-    g.fillText('square feet', W / 2, headH + 235);
+    g.fillText(runOnly ? 'linear feet' : 'square feet', W / 2, headH + 235);
     g.globalAlpha = 1;
 
     g.fillStyle = '#e8d9a8';
     g.font = `600 26px ${F}`;
-    g.fillText(
-      `Range: ${Math.max(0, Math.round(totalSqft - bandSqft)).toLocaleString()} – ${Math.round(totalSqft + bandSqft).toLocaleString()} sq ft`,
-      W / 2, headH + 275
-    );
+    if (!runOnly) {
+      g.fillText(
+        `Range: ${Math.max(0, Math.round(totalSqft - bandSqft)).toLocaleString()} – ${Math.round(totalSqft + bandSqft).toLocaleString()} sq ft`,
+        W / 2, headH + 275
+      );
+    }
 
     const acres = totalSqm / 4046.86;
     const extras = [];
-    if (acres >= 0.1) extras.push(`${acres.toFixed(2)} acres`);
-    extras.push(`${Math.round(totalSqm * 1.19599).toLocaleString()} sq yd`);
+    if (runOnly) {
+      extras.push(`${(headlineNum / 3).toFixed(1)} yd`);
+    } else {
+      if (acres >= 0.1) extras.push(`${acres.toFixed(2)} acres`);
+      extras.push(`${Math.round(totalSqm * 1.19599).toLocaleString()} sq yd`);
+      if (runs.length) extras.push(`+ ${Math.round(runs.reduce((s, z) => s + zoneLenFt(z), 0)).toLocaleString()} ft of run`);
+    }
     g.globalAlpha = 0.85;
     g.fillStyle = '#ffffff';
     g.font = `400 24px ${F}`;
@@ -2394,10 +2745,13 @@
       g.drawImage(cap.canvas, dx, dy, dw, dh);
       cap.zones.forEach(z => {
         drawPolygon(g, z.pts.map(p => ({ x: dx + p.x * s, y: dy + p.y * s })), {
-          // Cut-outs read as holes, in red, whether or not they're selected.
+          // Cut-outs read as holes, in red; runs as open blue lines.
+          open: z.line,
           fill: z.cut ? 'rgba(192,57,43,0.34)' : z.active ? 'rgba(45,106,45,0.28)' : 'rgba(30,30,30,0.22)',
-          stroke: z.cut ? '#ff6b5a' : z.active ? '#7ede7e' : '#dddddd',
-          width: 4, dot: 15, halo: true, numbered: z.active && !z.cut,
+          stroke: z.line ? '#3aa0ff' : z.cut ? '#ff6b5a' : z.active ? '#7ede7e' : '#dddddd',
+          width: z.line ? 7 : 4, dot: 15, halo: true,
+          dotFill: '#1c6fb0',
+          numbered: z.active && !z.cut,
         });
       });
     } else {
@@ -2453,6 +2807,33 @@
       cursorY += 60;
     }
 
+    // linear runs — their own section, in feet
+    if (runRows) {
+      g.textAlign = 'left';
+      g.fillStyle = '#1a1a1a';
+      g.font = `700 30px ${F}`;
+      g.fillText('Linear runs', 40, cursorY);
+      cursorY += 40;
+      runs.forEach(z => {
+        g.fillStyle = '#555';
+        g.font = `400 26px ${F}`;
+        g.textAlign = 'left';
+        g.fillText(z.name, 40, cursorY);
+        g.fillStyle = '#1c6fb0';
+        g.font = `700 26px ${F}`;
+        g.textAlign = 'right';
+        g.fillText(`${Math.round(zoneLenFt(z)).toLocaleString()} ft`, W - 40, cursorY);
+        cursorY += 40;
+      });
+      g.textAlign = 'left';
+      g.fillStyle = '#1c6fb0';
+      g.font = `800 28px ${F}`;
+      g.fillText('Total run', 40, cursorY + 4);
+      g.textAlign = 'right';
+      g.fillText(`${Math.round(runs.reduce((s, z) => s + zoneLenFt(z), 0)).toLocaleString()} ft`, W - 40, cursorY + 4);
+      cursorY += 60;
+    }
+
     // materials needed
     if (materialRows.length) {
       g.textAlign = 'left';
@@ -2461,39 +2842,57 @@
       g.fillText('Materials Needed', 40, cursorY);
       cursorY += 40;
 
+      const multiZone = (measured.length + runs.length) > 1;
       materialRows.forEach(r => {
         const name = r.layer.material.trim() || 'Layer';
-        const depthLabel = `${r.layer.depth}${r.layer.unit === 'in' ? '"' : ' ft'}`;
         const wastePct = parseFloat(r.layer.wastePct);
         const wasteLabel = wastePct > 0 ? ` +${wastePct}% waste` : '';
-        const prefix = multi ? `${r.zone} · ` : '';
-        const amountLabel = r.vol.tons != null
-          ? `${r.vol.cuyd.toFixed(2)} yd³ / ${r.vol.tons.toFixed(1)}t`
-          : `${r.vol.cuyd.toFixed(2)} yd³`;
+        const prefix = multiZone ? `${r.zone} · ` : '';
+        // Volume for ground, length for a run.
+        const spec = r.run ? wasteLabel.trim() : `${r.layer.depth}${r.layer.unit === 'in' ? '"' : ' ft'}${wasteLabel}`;
+        const amountLabel = r.run
+          ? `${Math.ceil(r.run.ft).toLocaleString()} ft`
+          : r.vol.tons != null
+            ? `${r.vol.cuyd.toFixed(2)} yd³ / ${r.vol.tons.toFixed(1)}t`
+            : `${r.vol.cuyd.toFixed(2)} yd³`;
         g.fillStyle = '#555';
         g.font = `400 26px ${F}`;
         g.textAlign = 'left';
-        g.fillText(`${prefix}${name} (${depthLabel}${wasteLabel})`, 40, cursorY);
-        g.fillStyle = '#2d6a2d';
+        g.fillText(spec ? `${prefix}${name} (${spec})` : `${prefix}${name}`, 40, cursorY);
+        g.fillStyle = r.run ? '#1c6fb0' : '#2d6a2d';
         g.font = `700 26px ${F}`;
         g.textAlign = 'right';
         g.fillText(amountLabel, W - 40, cursorY);
         cursorY += 42;
       });
 
-      const totalCuYd = materialRows.reduce((s, r) => s + r.vol.cuyd, 0);
-      const tonsRows = materialRows.filter(r => r.vol.tons != null);
-      const totalTons = tonsRows.reduce((s, r) => s + r.vol.tons, 0);
-      const totalLabel = tonsRows.length
-        ? `${totalCuYd.toFixed(2)} yd³ / ${totalTons.toFixed(1)}t`
-        : `${totalCuYd.toFixed(2)} yd³`;
-      g.textAlign = 'left';
-      g.fillStyle = '#2d6a2d';
-      g.font = `800 28px ${F}`;
-      g.fillText('Total', 40, cursorY + 6);
-      g.textAlign = 'right';
-      g.fillText(totalLabel, W - 40, cursorY + 6);
-      cursorY += 60;
+      // Volume and length can't be summed together, so each gets its own line.
+      const volRows = materialRows.filter(r => r.vol);
+      const runMats = materialRows.filter(r => r.run);
+      if (volRows.length) {
+        const totalCuYd = volRows.reduce((s, r) => s + r.vol.cuyd, 0);
+        const tonsRows = volRows.filter(r => r.vol.tons != null);
+        const totalTons = tonsRows.reduce((s, r) => s + r.vol.tons, 0);
+        g.textAlign = 'left';
+        g.fillStyle = '#2d6a2d';
+        g.font = `800 28px ${F}`;
+        g.fillText('Total bulk', 40, cursorY + 6);
+        g.textAlign = 'right';
+        g.fillText(tonsRows.length
+          ? `${totalCuYd.toFixed(2)} yd³ / ${totalTons.toFixed(1)}t`
+          : `${totalCuYd.toFixed(2)} yd³`, W - 40, cursorY + 6);
+        cursorY += 44;
+      }
+      if (runMats.length) {
+        g.textAlign = 'left';
+        g.fillStyle = '#1c6fb0';
+        g.font = `800 28px ${F}`;
+        g.fillText('Total by the foot', 40, cursorY + 6);
+        g.textAlign = 'right';
+        g.fillText(`${Math.ceil(runMats.reduce((s, r) => s + r.run.ft, 0)).toLocaleString()} ft`, W - 40, cursorY + 6);
+        cursorY += 44;
+      }
+      cursorY += 16;
     }
 
     // footer meta
@@ -2540,7 +2939,9 @@
     const z = activeZone();
     pinBtn.disabled = !state.currentPos || state.stale;
     undoBtn.disabled = z.pins.length === 0;
-    snapshotBtn.disabled = !state.zones.some(x => x.pins.length >= 3);
+    const anything = state.zones.some(isDrawn);
+    snapshotBtn.disabled = !anything;
+    copyBtn.disabled = !anything;
   }
 
   function renderAll(opts) {
@@ -2571,8 +2972,11 @@
         nextPinId: state.nextPinId,
         jobLabel: jobLabelInput.value,
         mapLocked: state.mapLocked,
+        jobId: state.jobId,
+        jobStarted: state.jobStarted,
       }));
     } catch (e) { /* storage unavailable or full — not fatal */ }
+    syncCurrentJob();
   }
 
   function loadState() {
@@ -2607,8 +3011,310 @@
 
     if (saved.jobLabel) jobLabelInput.value = saved.jobLabel;
     if (saved.mapLocked) state.mapLocked = true;
+    state.jobId = saved.jobId || null;
+    state.jobStarted = saved.jobStarted || null;
     return true;
   }
+
+  // ── OFFLINE / INSTALL ────────────────────────────────
+  // Registered late and defensively: a failure here must never take the app
+  // down with it, and the page is opened straight off disk often enough
+  // during development that an insecure origin is expected, not exceptional.
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') return;
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {
+        /* offline support unavailable; everything else still works */
+      });
+    });
+  }
+
+  // Chrome fires this instead of showing its own prompt once the app qualifies
+  // as installable; stash it so the button in the jobs sheet can trigger it.
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    const b = document.getElementById('install-btn');
+    if (b) b.style.display = 'flex';
+  });
+
+  document.getElementById('install-btn').addEventListener('click', async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      document.getElementById('install-btn').style.display = 'none';
+      showToast('Added — open it from your home screen');
+    }
+    installPrompt = null;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    const b = document.getElementById('install-btn');
+    if (b) b.style.display = 'none';
+  });
+
+  // Say plainly whether this session would survive losing signal.
+  function renderOfflineNote() {
+    const note = document.getElementById('offline-note');
+    if (!note) return;
+    const ready = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
+    note.textContent = ready
+      ? 'Every job saves itself as you measure. Saved for offline — this will open without signal.'
+      : 'Every job saves itself as you measure. Tap one to reopen it.';
+  }
+
+  // ── SCREEN WAKE LOCK ─────────────────────────────────
+  // Walking a perimeter means minutes between taps, which is exactly long
+  // enough for the screen to sleep — and a sleeping screen suspends the GPS
+  // watch. Held only while the page is actually visible, and re-taken after
+  // the phone is unlocked, because the lock is dropped on every hide.
+  let wakeLock = null;
+
+  async function acquireWakeLock() {
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { /* denied, low battery, or unsupported — not worth surfacing */ }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLock) acquireWakeLock();
+  });
+
+  // ── COPY TO CLIPBOARD ────────────────────────────────
+  // For dropping straight into a bid without retyping numbers off a photo.
+  function jobSummaryText() {
+    const lines = [jobTitle(), new Date().toLocaleString(), ''];
+    state.zones.filter(isDrawn).forEach(z => {
+      if (isLine(z)) {
+        lines.push(`${z.name}: ${Math.round(zoneLenFt(z)).toLocaleString()} linear ft`);
+        z.layers.forEach(l => {
+          const q = layerLength(l, zoneLenFt(z));
+          if (q) lines.push(`   ${l.material.trim() || 'Item'}: ${Math.ceil(q.ft).toLocaleString()} ft`);
+        });
+      } else if (isCut(z)) {
+        lines.push(`${z.name} (cut out): ${Math.round(zoneSqft(z)).toLocaleString()} sq ft`);
+      } else {
+        const cuts = cutoutsFor(z);
+        const net = zoneNetSqft(z);
+        lines.push(`${z.name}: ${Math.round(net).toLocaleString()} sq ft`
+          + (cuts.length ? ` (${Math.round(zoneSqft(z)).toLocaleString()} less ${cuts.map(c =>
+              `${c.zone.name} ${Math.round(c.sqft).toLocaleString()}`).join(', ')})` : ''));
+        z.layers.forEach(l => {
+          const v = layerVolume(l, net);
+          if (v) lines.push(`   ${l.material.trim() || 'Layer'}: ${v.cuyd.toFixed(2)} yd³`
+            + (v.tons != null ? ` / ${v.tons.toFixed(1)} tons` : ''));
+        });
+      }
+    });
+    lines.push('');
+    if (jobSqft()) lines.push(`TOTAL AREA: ${Math.round(jobSqft()).toLocaleString()} sq ft`);
+    if (jobLinearFt()) lines.push(`TOTAL RUN: ${Math.round(jobLinearFt()).toLocaleString()} linear ft`);
+    return lines.join('\n');
+  }
+
+  copyBtn.addEventListener('click', async () => {
+    const text = jobSummaryText();
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Copied — paste into your bid');
+    } catch (e) {
+      // Clipboard API needs a secure context and can still be refused; fall
+      // back to a selectable textarea rather than losing the numbers.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:20%;left:5%;width:90%;height:50%;z-index:300;font-size:13px;';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('Copied — paste into your bid');
+        ta.remove();
+      } catch (e2) {
+        showToast('Select and copy, then tap outside');
+        ta.addEventListener('blur', () => ta.remove());
+      }
+    }
+  });
+
+  // ── JOB HISTORY ──────────────────────────────────────
+  // The app used to hold exactly one job: measuring the next property
+  // destroyed the last one, with no way back. Now every job carries an id and
+  // writes itself into a list as you work, so nothing has to be remembered or
+  // explicitly saved — the failure mode was losing a number someone bids off.
+  const JOBS_KEY = 'yardMeasureJobs';
+  const MAX_JOBS = 60;
+
+  function readJobs() {
+    try { return JSON.parse(localStorage.getItem(JOBS_KEY)) || []; } catch (e) { return []; }
+  }
+
+  function writeJobs(jobs) {
+    try {
+      localStorage.setItem(JOBS_KEY, JSON.stringify(jobs));
+      return true;
+    } catch (e) {
+      // Almost always the 5MB quota. Drop the oldest and try once more rather
+      // than failing the save that's in front of the user.
+      try {
+        localStorage.setItem(JOBS_KEY, JSON.stringify(jobs.slice(0, Math.max(1, Math.floor(jobs.length / 2)))));
+        showToast('Storage was full — trimmed the oldest jobs');
+        return true;
+      } catch (e2) {
+        showToast("Couldn't save job history — storage full");
+        return false;
+      }
+    }
+  }
+
+  function jobTitle() {
+    return jobLabelInput.value.trim() || `Untitled — ${new Date(state.jobStarted || Date.now())
+      .toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+  }
+
+  function snapshotOfCurrentJob() {
+    return {
+      id: state.jobId,
+      name: jobTitle(),
+      started: state.jobStarted,
+      savedAt: Date.now(),
+      sqft: Math.round(jobSqft()),
+      lenFt: Math.round(jobLinearFt()),
+      zoneCount: state.zones.filter(isDrawn).length,
+      zones: state.zones,
+      nextZoneId: state.nextZoneId,
+      nextPinId: state.nextPinId,
+    };
+  }
+
+  // Called on every mutation. Only files a job once something is actually
+  // measured, so half-tapped scratch work doesn't clutter the list.
+  function syncCurrentJob() {
+    if (!state.zones.some(isDrawn)) return;
+    const jobs = readJobs().filter(j => j.id !== state.jobId);
+    jobs.unshift(snapshotOfCurrentJob());
+    writeJobs(jobs.slice(0, MAX_JOBS));
+  }
+
+  function startNewJob(seed) {
+    state.jobId = 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    state.jobStarted = Date.now();
+    state.zones = [];
+    state.activeZoneId = null;
+    state.nextZoneId = 1;
+    state.nextPinId = 1;
+    jobLabelInput.value = seed && seed.name ? seed.name : '';
+    if (seed && seed.zones) {
+      state.zones = JSON.parse(JSON.stringify(seed.zones));
+      state.nextZoneId = seed.nextZoneId || state.zones.length + 1;
+      state.nextPinId = seed.nextPinId ||
+        state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
+      state.activeZoneId = state.zones.length ? state.zones[0].id : null;
+    }
+    ensureZone();
+    renderAll({ fit: true });
+    saveState();
+  }
+
+  function openJob(id) {
+    const job = readJobs().find(j => j.id === id);
+    if (!job) { showToast('That job is gone'); return; }
+    // File whatever is on screen first, so switching never loses it.
+    syncCurrentJob();
+    state.jobId = job.id;
+    state.jobStarted = job.started || job.savedAt;
+    state.zones = job.zones || [];
+    state.zones.forEach(z => { if (!z.mode) z.mode = 'area'; });
+    state.nextZoneId = job.nextZoneId || state.zones.length + 1;
+    state.nextPinId = job.nextPinId ||
+      state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
+    state.activeZoneId = state.zones.length ? state.zones[0].id : null;
+    jobLabelInput.value = /^Untitled — /.test(job.name) ? '' : job.name;
+    ensureZone();
+    renderAll({ fit: true });
+    saveState();
+    closeJobs();
+    showToast(`Opened ${job.name}`);
+  }
+
+  function renderJobs() {
+    const jobs = readJobs();
+    const list = document.getElementById('jobs-list');
+    if (!jobs.length) {
+      list.innerHTML = '<div class="empty-state">No saved jobs yet — measure something and it lands here</div>';
+      return;
+    }
+    list.innerHTML = jobs.map(j => {
+      const when = new Date(j.savedAt).toLocaleString([], {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const bits = [];
+      if (j.sqft) bits.push(`<span class="job-badge">${j.sqft.toLocaleString()} sq ft</span>`);
+      if (j.lenFt) bits.push(`<span class="job-badge run">${j.lenFt.toLocaleString()} ft run</span>`);
+      bits.push(`${j.zoneCount} zone${j.zoneCount !== 1 ? 's' : ''}`);
+      return `<div class="job-row ${j.id === state.jobId ? 'current' : ''}">
+        <button class="job-open" data-open="${j.id}">
+          <div class="job-name">${escapeHtml(j.name)}${j.id === state.jobId ? ' · open now' : ''}</div>
+          <div class="job-meta">${bits.join(' · ')} · ${when}</div>
+        </button>
+        <button class="job-act" data-dup="${j.id}" title="Duplicate">⧉</button>
+        <button class="job-act" data-del="${j.id}" title="Delete">🗑</button>
+      </div>`;
+    }).join('');
+  }
+
+  function openJobs() {
+    syncCurrentJob();
+    renderJobs();
+    renderOfflineNote();
+    document.getElementById('jobs-overlay').classList.add('open');
+  }
+
+  function closeJobs() {
+    document.getElementById('jobs-overlay').classList.remove('open');
+  }
+
+  document.getElementById('jobs-btn').addEventListener('click', openJobs);
+  document.getElementById('jobs-close').addEventListener('click', closeJobs);
+  document.getElementById('jobs-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'jobs-overlay') closeJobs();
+  });
+
+  document.getElementById('new-job-btn').addEventListener('click', () => {
+    syncCurrentJob();
+    startNewJob();
+    closeJobs();
+    showToast('New job started');
+  });
+
+  document.getElementById('jobs-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-open], button[data-dup], button[data-del]');
+    if (!btn) return;
+    if (btn.dataset.open) { openJob(btn.dataset.open); return; }
+    if (btn.dataset.dup) {
+      const job = readJobs().find(j => j.id === btn.dataset.dup);
+      if (!job) return;
+      syncCurrentJob();
+      startNewJob({ name: `${job.name} (copy)`, zones: job.zones, nextZoneId: job.nextZoneId, nextPinId: job.nextPinId });
+      syncCurrentJob();
+      closeJobs();
+      showToast('Duplicated — measurements copied');
+      return;
+    }
+    if (btn.dataset.del) {
+      const job = readJobs().find(j => j.id === btn.dataset.del);
+      if (!job || !confirm(`Delete "${job.name}"? This can't be undone.`)) return;
+      writeJobs(readJobs().filter(j => j.id !== btn.dataset.del));
+      // Deleting the job you're standing in leaves the work on screen but
+      // unfiled; give it a fresh id so it doesn't resurrect the deleted row.
+      if (job.id === state.jobId) state.jobId = 'j' + Date.now().toString(36);
+      renderJobs();
+      showToast('Job deleted');
+    }
+  });
 
   // ── TOAST ────────────────────────────────────────────
   function showToast(msg) {
@@ -2620,11 +3326,19 @@
 
   // ── INIT ─────────────────────────────────────────────
   const restored = loadState();
+  // Work restored from before job history existed still needs an id, or it
+  // could never be filed.
+  if (!state.jobId) {
+    state.jobId = 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    state.jobStarted = state.jobStarted || Date.now();
+  }
   ensureZone();
   renderAll();
   if (restored) showToast('Restored your last job');
   startGPS();
   initMap();
+  acquireWakeLock();
+  registerServiceWorker();
 </script>
 </body>
 </html>
