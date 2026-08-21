@@ -257,6 +257,17 @@
     border-color: var(--green-light);
   }
 
+  /* A cut-out reads as a hole, not another patch of ground. */
+  .zone-chip.cut {
+    border-style: dashed;
+    color: var(--red);
+  }
+
+  .zone-chip.cut.active {
+    border-color: var(--red);
+    background: #fdf2f1;
+  }
+
   /* POINTS LIST */
   #points-section {
     padding: 16px 16px 0;
@@ -601,14 +612,17 @@
 
   #map-search-btn:active { opacity: 0.85; }
 
+  /* Four controls do not fit one line on a 320px phone; let them wrap rather
+     than push the whole page sideways. */
   #map-toolbar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 8px;
   }
 
-  #tap-mode-btn, #parcel-btn {
+  #tap-mode-btn, #parcel-btn, #lock-btn {
     background: white;
     border: 2px solid #e0e0e0;
     color: var(--mid);
@@ -628,8 +642,19 @@
     color: white;
   }
 
+  #lock-btn.on {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: #3a2f0b;
+  }
+
+  /* A locked map gets a gold edge, so it's obvious at a glance why dragging
+     the map does nothing. */
+  #yard-map.locked {
+    box-shadow: 0 0 0 3px var(--gold);
+  }
+
   #imagery-select {
-    margin-left: auto;
     border: 2px solid #e0e0e0;
     border-radius: 20px;
     padding: 8px 6px;
@@ -637,7 +662,8 @@
     font-family: inherit;
     background: white;
     color: var(--mid);
-    max-width: 42%;
+    flex: 1 1 130px;
+    min-width: 0;
   }
 
   .map-hint {
@@ -671,7 +697,18 @@
   /* MapLibre paints its own attribution block; ours lives under the map. */
   .maplibregl-ctrl-attrib { display: none !important; }
 
+  /* The dot stays 28px so a tight shape stays readable, but ::before widens
+     the grabbable area to ~46px — the usual reason the map moves instead of
+     the pin is a finger landing just outside the dot. */
+  .map-pin-marker::before {
+    content: '';
+    position: absolute;
+    inset: -9px;
+    border-radius: 50%;
+  }
+
   .map-pin-marker {
+    position: relative;
     width: 28px;
     height: 28px;
     border-radius: 50%;
@@ -761,6 +798,7 @@
   <div class="result-total" id="result-total"></div>
 </div>
 <div class="result-warning" id="result-warning">⚠️ Pins may be out of order — shape crosses itself, area could be wrong</div>
+<div class="result-warning" id="cut-warning"></div>
 
 <div id="map-wrap">
   <div id="map-search-bar">
@@ -769,6 +807,8 @@
   </div>
   <div id="map-toolbar">
     <button id="tap-mode-btn" type="button">👆 Tap to add</button>
+    <button id="lock-btn" type="button">🔓 Lock map</button>
+
     <button id="parcel-btn" type="button">▦ Lot lines</button>
     <select id="imagery-select" title="Aerial imagery source"></select>
   </div>
@@ -844,6 +884,7 @@
     recentFixes: [],
     stale: false,
     tapMode: false,
+    mapLocked: false,
   };
 
   const STALE_MS = 6000;
@@ -868,6 +909,7 @@
   const resultRange = document.getElementById('result-range');
   const resultTotal = document.getElementById('result-total');
   const resultWarning = document.getElementById('result-warning');
+  const cutWarning = document.getElementById('cut-warning');
   const pointsList = document.getElementById('points-list');
   const pinCountEl = document.getElementById('pin-count');
   const zoneTabs = document.getElementById('zone-tabs');
@@ -883,13 +925,17 @@
   const mapHint = document.getElementById('map-hint');
   const mapEl = document.getElementById('yard-map');
   const parcelBtn = document.getElementById('parcel-btn');
+  const lockBtn = document.getElementById('lock-btn');
   const imagerySelect = document.getElementById('imagery-select');
 
   // ── ZONES ────────────────────────────────────────────
-  function newZone(name) {
+  // mode 'area' measures ground. mode 'cut' is a hole punched out of whatever
+  // area contains it — a house, a driveway, a pond, a shed pad.
+  function newZone(name, mode) {
     const z = {
       id: state.nextZoneId++,
       name: name || `Zone ${state.nextZoneId - 1}`,
+      mode: mode || 'area',
       pins: [],
       layers: [],
       nextLayerId: 1,
@@ -907,12 +953,51 @@
     if (!state.zones.some(z => z.id === state.activeZoneId)) state.activeZoneId = state.zones[0].id;
   }
 
+  const isCut = z => z.mode === 'cut';
+
+  // Gross: the shape as walked, before anything is taken out of it.
   function zoneSqft(z) {
     return calcAreaSqm(z.pins) * 10.7639;
   }
 
+  // What each cut-out actually removes from this zone — the real overlap, so
+  // a driveway half in and half out only takes off the half that's in.
+  function cutoutsFor(zone) {
+    if (isCut(zone) || zone.pins.length < 3) return [];
+    return state.zones
+      .filter(z => isCut(z) && z.pins.length >= 3)
+      .map(z => ({ zone: z, sqft: overlapSqm(zone.pins, z.pins) * 10.7639 }))
+      .filter(c => c.sqft > 0.5);
+  }
+
+  // Net: what you actually order material for.
+  function zoneNetSqft(z) {
+    if (isCut(z)) return 0; // a hole contributes through its parent, never on its own
+    const cut = cutoutsFor(z).reduce((s, c) => s + c.sqft, 0);
+    return Math.max(0, zoneSqft(z) - cut);
+  }
+
   function jobSqft() {
-    return state.zones.reduce((s, z) => s + zoneSqft(z), 0);
+    return state.zones.reduce((s, z) => s + zoneNetSqft(z), 0);
+  }
+
+  // A cut that overlaps no measured area removes nothing, and is nearly always
+  // a mis-set mode rather than an intentional floating hole.
+  function orphanCuts() {
+    return state.zones.filter(z =>
+      isCut(z) && z.pins.length >= 3 &&
+      !state.zones.some(a => !isCut(a) && a.pins.length >= 3 && overlapSqm(a.pins, z.pins) > 0.5));
+  }
+
+  // Two cuts covering the same ground would each be subtracted in full, so the
+  // overlap would come off twice. Flag rather than silently under-count.
+  function overlappingCuts() {
+    const cuts = state.zones.filter(z => isCut(z) && z.pins.length >= 3);
+    const pairs = [];
+    for (let i = 0; i < cuts.length; i++)
+      for (let j = i + 1; j < cuts.length; j++)
+        if (overlapSqm(cuts[i].pins, cuts[j].pins) > 0.5) pairs.push([cuts[i], cuts[j]]);
+    return pairs;
   }
 
   function renderZoneTabs() {
@@ -920,13 +1005,17 @@
     zoneCountEl.textContent = `${n} zone${n !== 1 ? 's' : ''}`;
     const chips = state.zones.map(z => {
       const active = z.id === state.activeZoneId;
-      const sqft = zoneSqft(z);
-      const area = sqft > 0 ? `${Math.round(sqft).toLocaleString()} ft²` : `${z.pins.length} pin${z.pins.length !== 1 ? 's' : ''}`;
+      const cut = isCut(z);
+      const sqft = cut ? zoneSqft(z) : zoneNetSqft(z);
+      const area = z.pins.length >= 3
+        ? `${cut ? '−' : ''}${Math.round(sqft).toLocaleString()} ft²`
+        : `${z.pins.length} pin${z.pins.length !== 1 ? 's' : ''}`;
       const acts = active
-        ? `<button class="chip-act" data-act="rename" title="Rename">✏️</button>` +
+        ? `<button class="chip-act" data-act="mode" title="${cut ? 'Make this measured area' : 'Make this a cut-out'}">${cut ? '⊖' : '⊕'}</button>` +
+          `<button class="chip-act" data-act="rename" title="Rename">✏️</button>` +
           (n > 1 ? `<button class="chip-act" data-act="delete" title="Delete zone">×</button>` : '')
         : '';
-      return `<button class="zone-chip ${active ? 'active' : ''}" data-zone="${z.id}">
+      return `<button class="zone-chip ${active ? 'active' : ''} ${cut ? 'cut' : ''}" data-zone="${z.id}">
         <span>${escapeHtml(z.name)}</span><span class="zone-area">${area}</span>${acts}
       </button>`;
     }).join('');
@@ -949,6 +1038,18 @@
     const zone = state.zones.find(z => z.id === Number(chip.dataset.zone));
     if (!zone) return;
 
+    if (act === 'mode') {
+      zone.mode = isCut(zone) ? 'area' : 'cut';
+      // A cut-out is a hole in the ground, not ground of its own — it can't
+      // carry its own material order.
+      if (isCut(zone)) zone.layers = [];
+      renderAll();
+      saveState();
+      showToast(isCut(zone)
+        ? `"${zone.name}" now cuts out of whatever contains it`
+        : `"${zone.name}" now adds area`);
+      return;
+    }
     if (act === 'rename') {
       const name = prompt('Zone name', zone.name);
       if (name && name.trim()) zone.name = name.trim().slice(0, 30);
@@ -1177,16 +1278,123 @@
   }
 
   // ── MATH ─────────────────────────────────────────────
-  // Local equirectangular projection to metres, anchored on the first pin.
-  function project(pins) {
+  // Local equirectangular projection to metres. Anchored on the first pin
+  // unless a shared anchor is passed — comparing two polygons requires both
+  // to sit in the same flat frame.
+  function project(pins, ref) {
     if (!pins.length) return [];
-    const latRef = pins[0].lat, lngRef = pins[0].lng;
+    const latRef = (ref || pins[0]).lat, lngRef = (ref || pins[0]).lng;
     const R = 6371000;
     return pins.map(p => ({
       x: (p.lng - lngRef) * Math.PI / 180 * R * Math.cos(latRef * Math.PI / 180),
       y: (p.lat - latRef) * Math.PI / 180 * R,
       acc: p.accuracy,
     }));
+  }
+
+  // ── CUT-OUTS ─────────────────────────────────────────
+  // Exact overlap area between two walked shapes, so a house, driveway or
+  // pond can be taken back out of the lawn that contains it.
+  //
+  // Containment alone isn't enough — a driveway often straddles the edge of
+  // the area you walked, and subtracting all of it would under-order material
+  // while subtracting none would over-order. So this measures the real
+  // overlap: both shapes are cut into triangles by ear clipping, then every
+  // triangle of one is clipped against every triangle of the other with
+  // Sutherland-Hodgman. That algorithm is only exact when the clip polygon is
+  // convex — and a triangle always is, which is the point of triangulating
+  // first. Yard shapes have a handful of corners, so the pairwise loop is
+  // nothing. Result is exact for any simple polygon, convex or not.
+
+  const cross3 = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+
+  function signedArea(pts) {
+    let s = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      s += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+    }
+    return s / 2;
+  }
+
+  function polyArea(pts) {
+    return pts.length < 3 ? 0 : Math.abs(signedArea(pts));
+  }
+
+  function pointInTriangle(p, a, b, c) {
+    const d1 = cross3(a, b, p), d2 = cross3(b, c, p), d3 = cross3(c, a, p);
+    const neg = d1 < 0 || d2 < 0 || d3 < 0;
+    const pos = d1 > 0 || d2 > 0 || d3 > 0;
+    return !(neg && pos);
+  }
+
+  function triangulate(poly) {
+    const pts = poly.slice();
+    if (signedArea(pts) < 0) pts.reverse(); // ear clipping wants CCW
+    const idx = pts.map((_, i) => i);
+    const tris = [];
+    let guard = 0;
+    while (idx.length > 3 && guard++ < 5000) {
+      let clipped = false;
+      for (let i = 0; i < idx.length; i++) {
+        const n = idx.length;
+        const ai = (i - 1 + n) % n, ci = (i + 1) % n;
+        const a = pts[idx[ai]], b = pts[idx[i]], c = pts[idx[ci]];
+        if (cross3(a, b, c) <= 0) continue; // reflex corner, not an ear
+        let ok = true;
+        for (let j = 0; j < n; j++) {
+          if (j === i || j === ai || j === ci) continue;
+          if (pointInTriangle(pts[idx[j]], a, b, c)) { ok = false; break; }
+        }
+        if (!ok) continue;
+        tris.push([a, b, c]);
+        idx.splice(i, 1);
+        clipped = true;
+        break;
+      }
+      if (!clipped) break; // self-intersecting or degenerate — bail out
+    }
+    if (idx.length === 3) tris.push([pts[idx[0]], pts[idx[1]], pts[idx[2]]]);
+    return tris;
+  }
+
+  function segIntersect(p1, p2, p3, p4) {
+    const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+    if (Math.abs(d) < 1e-12) return p2;
+    const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+    return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };
+  }
+
+  function clipConvex(subject, clip) {
+    const cl = signedArea(clip) < 0 ? clip.slice().reverse() : clip;
+    let out = subject;
+    for (let i = 0; i < cl.length && out.length; i++) {
+      const a = cl[i], b = cl[(i + 1) % cl.length];
+      const input = out;
+      out = [];
+      const inside = p => cross3(a, b, p) >= 0;
+      for (let j = 0; j < input.length; j++) {
+        const cur = input[j], prev = input[(j - 1 + input.length) % input.length];
+        const ci = inside(cur), pi = inside(prev);
+        if (ci) {
+          if (!pi) out.push(segIntersect(prev, cur, a, b));
+          out.push(cur);
+        } else if (pi) {
+          out.push(segIntersect(prev, cur, a, b));
+        }
+      }
+    }
+    return out;
+  }
+
+  function overlapSqm(pinsA, pinsB) {
+    if (pinsA.length < 3 || pinsB.length < 3) return 0;
+    const ref = pinsA[0];
+    const trisA = triangulate(project(pinsA, ref));
+    const trisB = triangulate(project(pinsB, ref));
+    let total = 0;
+    trisA.forEach(ta => trisB.forEach(tb => { total += polyArea(clipConvex(ta, tb)); }));
+    return total;
   }
 
   // Shoelace formula on projected coords → square metres.
@@ -1239,11 +1447,15 @@
 
   function renderResult() {
     const z = activeZone();
-    const sqm = calcAreaSqm(z.pins);
-    const sqft = sqm * 10.7639;
+    const cut = isCut(z);
+    const grossSqft = zoneSqft(z);
+    const cuts = cutoutsFor(z);
+    const netSqft = cut ? grossSqft : zoneNetSqft(z);
     const multi = state.zones.length > 1;
 
-    resultLabel.textContent = multi ? `${z.name} — Estimated Area` : 'Estimated Area';
+    resultLabel.textContent = cut
+      ? `${z.name} — Cut-out`
+      : multi ? `${z.name} — Estimated Area` : 'Estimated Area';
 
     if (z.pins.length < 3) {
       resultSqft.textContent = '—';
@@ -1252,29 +1464,52 @@
       resultWarning.style.display = 'none';
       layersSection.style.display = 'none';
     } else {
-      resultSqft.textContent = Math.round(sqft).toLocaleString();
+      resultSqft.textContent = `${cut ? '−' : ''}${Math.round(netSqft).toLocaleString()}`;
 
-      // Reported as a ~95% band: two sigma of the propagated area error.
-      const bandSqft = 2 * areaSigmaSqm(z.pins) * 10.7639;
-      const low = Math.max(0, Math.round(sqft - bandSqft));
-      const high = Math.round(sqft + bandSqft);
-      resultRange.innerHTML = `Range: <span>${low.toLocaleString()}</span> – <span>${high.toLocaleString()}</span> sq ft`;
+      // Show the arithmetic, not just the answer — a crew about to order
+      // material should be able to see what came off and why.
+      if (cuts.length) {
+        const parts = cuts.map(c => `${escapeHtml(c.zone.name)} ${Math.round(c.sqft).toLocaleString()}`);
+        resultRange.innerHTML =
+          `${Math.round(grossSqft).toLocaleString()} walked − ${parts.join(' − ')} = <span>${Math.round(netSqft).toLocaleString()}</span> sq ft`;
+      } else {
+        // Reported as a ~95% band: two sigma of the propagated area error.
+        const bandSqft = 2 * areaSigmaSqm(z.pins) * 10.7639;
+        const low = Math.max(0, Math.round(netSqft - bandSqft));
+        const high = Math.round(netSqft + bandSqft);
+        resultRange.innerHTML = `Range: <span>${low.toLocaleString()}</span> – <span>${high.toLocaleString()}</span> sq ft`;
+      }
 
       const extras = [];
-      const acres = sqm / 4046.86;
+      const netSqm = netSqft / 10.7639;
+      const acres = netSqm / 4046.86;
       if (acres >= 0.1) extras.push(`${acres.toFixed(2)} acres`);
-      extras.push(`${Math.round(sqm * 1.19599).toLocaleString()} sq yd`);
+      extras.push(`${Math.round(netSqm * 1.19599).toLocaleString()} sq yd`);
       extras.push(`${Math.round(calcPerimeterM(z.pins) * M_TO_FT).toLocaleString()} ft perimeter`);
       resultExtra.innerHTML = extras.join(' &nbsp;·&nbsp; ');
 
       resultWarning.style.display = isSelfIntersecting(z.pins) ? 'block' : 'none';
-      layersSection.style.display = 'block';
+      // A cut-out is a hole, so it never carries its own material order.
+      layersSection.style.display = cut ? 'none' : 'block';
+    }
+
+    const orphans = orphanCuts();
+    const dblCuts = overlappingCuts();
+    if (orphans.length || dblCuts.length) {
+      cutWarning.style.display = 'block';
+      cutWarning.innerHTML = orphans.length
+        ? `⚠️ ${orphans.map(o => escapeHtml(o.name)).join(', ')} ${orphans.length > 1 ? 'are' : 'is'} set to cut out but ${orphans.length > 1 ? 'sit' : 'sits'} outside every measured area — nothing is being subtracted`
+        : `⚠️ ${dblCuts.map(p => `${escapeHtml(p[0].name)} and ${escapeHtml(p[1].name)}`).join('; ')} overlap each other — the shared part is being subtracted twice`;
+    } else {
+      cutWarning.style.display = 'none';
     }
 
     if (multi) {
-      const measured = state.zones.filter(x => x.pins.length >= 3).length;
+      const areas = state.zones.filter(x => !isCut(x) && x.pins.length >= 3).length;
+      const nCuts = state.zones.filter(x => isCut(x) && x.pins.length >= 3).length;
       resultTotal.style.display = 'block';
-      resultTotal.innerHTML = `Job total <b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> across ${measured} measured zone${measured !== 1 ? 's' : ''}`;
+      resultTotal.innerHTML = `Job total <b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> across ${areas} measured area${areas !== 1 ? 's' : ''}`
+        + (nCuts ? `, ${nCuts} cut-out${nCuts !== 1 ? 's' : ''} removed` : '');
     } else {
       resultTotal.style.display = 'none';
     }
@@ -1404,8 +1639,10 @@
     saveState();
   });
 
+  // Material always comes off the NET area. Ordering topsoil for the footprint
+  // of the house is the whole reason cut-outs exist.
   function volumeLabel(l) {
-    const vol = layerVolume(l, zoneSqft(activeZone()));
+    const vol = layerVolume(l, zoneNetSqft(activeZone()));
     if (!vol) return '—';
     let label = `${vol.cuyd.toFixed(2)} yd³`;
     if (vol.tons != null) label += ` · ${vol.tons.toFixed(1)}t`;
@@ -1450,7 +1687,7 @@
   }
 
   function updateLayersTotal() {
-    const areaSqft = zoneSqft(activeZone());
+    const areaSqft = zoneNetSqft(activeZone());
     const vols = activeZone().layers.map(l => layerVolume(l, areaSqft)).filter(Boolean);
     if (vols.length === 0) {
       layersTotalEl.style.display = 'none';
@@ -1573,6 +1810,7 @@
       map.on('load', () => {
         mapReady = true;
         addShapeLayers();
+        applyLock(); // a job reloaded mid-measure comes back locked
         map.on('click', onMapClick);
         if (state.currentPos) updateYouAreHere(state.currentPos.lat, state.currentPos.lng);
         updateMapShape({ fit: true });
@@ -1593,8 +1831,14 @@
     map.addLayer({
       id: 'yard-shape-fill', type: 'fill', source: 'yard-shape',
       paint: {
-        'fill-color': ['case', ['get', 'active'], '#2d6a2d', '#3a3a3a'],
-        'fill-opacity': ['case', ['get', 'active'], 0.25, 0.12],
+        'fill-color': ['case',
+          ['get', 'cut'], '#c0392b',
+          ['get', 'active'], '#2d6a2d',
+          '#3a3a3a'],
+        'fill-opacity': ['case',
+          ['get', 'cut'], 0.3,
+          ['get', 'active'], 0.25,
+          0.12],
       },
     });
     // Two line layers rather than one with a `case` on the dash pattern:
@@ -1604,12 +1848,17 @@
     // pattern constant, which is supported.
     map.addLayer({
       id: 'yard-shape-line-other', type: 'line', source: 'yard-shape',
-      filter: ['!', ['get', 'active']],
+      filter: ['all', ['!', ['get', 'active']], ['!', ['get', 'cut']]],
       paint: { 'line-color': '#dddddd', 'line-width': 2, 'line-dasharray': [2, 2], 'line-opacity': 0.9 },
     });
     map.addLayer({
+      id: 'yard-shape-line-cut', type: 'line', source: 'yard-shape',
+      filter: ['get', 'cut'],
+      paint: { 'line-color': '#ff6b5a', 'line-width': 3, 'line-dasharray': [3, 2] },
+    });
+    map.addLayer({
       id: 'yard-shape-line', type: 'line', source: 'yard-shape',
-      filter: ['get', 'active'],
+      filter: ['all', ['get', 'active'], ['!', ['get', 'cut']]],
       paint: { 'line-color': '#2d6a2d', 'line-width': 3 },
     });
   }
@@ -1693,6 +1942,43 @@
 
   parcelBtn.addEventListener('click', () => setParcels(!showParcels));
 
+  // ── LOCK ─────────────────────────────────────────────
+  // Nudging a corner on a phone means putting a fingertip on a 28px dot. Miss
+  // it slightly and you grab the map instead, which slides the photo out from
+  // under every pin you already placed. Locking freezes the view so the only
+  // thing a drag can move is a pin.
+  //
+  // Gestures only. The +/− buttons still work because they call the camera
+  // directly rather than going through a gesture handler — so you can still
+  // zoom deliberately while locked, just not by accident.
+  const GESTURES = ['dragPan', 'scrollZoom', 'boxZoom', 'dragRotate',
+                    'keyboard', 'doubleClickZoom', 'touchZoomRotate', 'touchPitch'];
+
+  function applyLock() {
+    if (!map) return;
+    GESTURES.forEach(g => {
+      const h = map[g];
+      if (!h) return;
+      if (state.mapLocked) h.disable(); else h.enable();
+    });
+  }
+
+  function setMapLocked(on) {
+    state.mapLocked = on;
+    lockBtn.classList.toggle('on', on);
+    lockBtn.textContent = on ? '🔒 Locked' : '🔓 Lock map';
+    mapEl.classList.toggle('locked', on);
+    applyLock();
+    saveState();
+  }
+
+  lockBtn.addEventListener('click', () => {
+    setMapLocked(!state.mapLocked);
+    showToast(state.mapLocked
+      ? 'Map locked — drag pins without the map sliding'
+      : 'Map unlocked');
+  });
+
   // Swapping imagery replaces the whole style, which discards our shape layers
   // and parcel overlay — so both get rebuilt once the new style settles.
   imagerySelect.innerHTML = Object.entries(IMAGERY)
@@ -1727,7 +2013,11 @@
       const marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true })
         .setLngLat([p.lng, p.lat])
         .addTo(map);
+      // Belt and braces alongside the lock: once a drag on a pin has started,
+      // the map must not pan even if the finger wanders off the marker.
+      marker.on('dragstart', () => { if (map.dragPan) map.dragPan.disable(); });
       marker.on('dragend', () => {
+        if (map.dragPan && !state.mapLocked) map.dragPan.enable();
         const ll = marker.getLngLat();
         p.lat = ll.lat;
         p.lng = ll.lng;
@@ -1749,7 +2039,8 @@
       if (coords.length >= 3) geometry = { type: 'Polygon', coordinates: [[...coords, coords[0]]] };
       else if (coords.length === 2) geometry = { type: 'LineString', coordinates: coords };
       if (!geometry) return null;
-      return { type: 'Feature', properties: { active: zone.id === state.activeZoneId }, geometry };
+      return { type: 'Feature',
+        properties: { active: zone.id === state.activeZoneId, cut: isCut(zone) }, geometry };
     }).filter(Boolean);
 
     const src = map.getSource('yard-shape');
@@ -1769,7 +2060,12 @@
     );
   }
 
+  // Locked means locked: the app doesn't get to re-frame the view either.
+  // Auto-fitting after each dropped pin is exactly the kind of movement the
+  // lock is there to stop. Snapshot capture bypasses this deliberately — it
+  // restores the camera when it's done.
   function fitTo(pins) {
+    if (state.mapLocked) return;
     const b = boundsFor(pins);
     if (b) map.fitBounds(b, { padding: 60, maxZoom: 21, duration: 400 });
   }
@@ -1880,6 +2176,7 @@
       const zones = measured
         .map(z => ({
           active: z.id === state.activeZoneId,
+          cut: isCut(z),
           pts: z.pins.map(p => {
             const q = map.project([p.lng, p.lat]);
             return { x: q.x * ratio, y: q.y * ratio };
@@ -1964,8 +2261,10 @@
   }
 
   async function exportSnapshot() {
-    const measured = state.zones.filter(z => z.pins.length >= 3);
-    if (!measured.length) { showToast('Need at least 3 pins'); return; }
+    const drawn = state.zones.filter(z => z.pins.length >= 3);
+    const measured = drawn.filter(z => !isCut(z));
+    const cuts = drawn.filter(isCut);
+    if (!measured.length) { showToast('Need at least one measured area'); return; }
     // Keyed off zones that actually have an area — a half-outlined second zone
     // shouldn't turn the card into a one-row "2 zones" breakdown.
     const multi = measured.length > 1;
@@ -1973,16 +2272,19 @@
 
     // Per-zone material lines, tagged with the zone so a multi-zone job
     // reads as an order sheet rather than one undifferentiated pile.
+    // Net area, so a cut-out is never paid for twice.
     const materialRows = [];
     measured.forEach(z => {
-      const areaSqft = zoneSqft(z);
+      const areaSqft = zoneNetSqft(z);
       z.layers.forEach(l => {
         const vol = layerVolume(l, areaSqft);
         if (vol) materialRows.push({ zone: z.name, layer: l, vol });
       });
     });
 
-    const zoneRows = multi ? measured.length + 1 : 0;
+    // Show the breakdown whenever there is arithmetic worth showing — more
+    // than one area, or anything taken out of one.
+    const zoneRows = (multi || cuts.length) ? measured.length + cuts.length + 1 : 0;
     const W = 1080;
     const cardH = 620;
     const headH = 150, resultH = 340;
@@ -2012,11 +2314,12 @@
     g.fillText(new Date().toLocaleString(), 40, 112);
     g.globalAlpha = 1;
 
-    // headline area: the whole job when there is more than one zone
-    const totalSqm = measured.reduce((s, z) => s + calcAreaSqm(z.pins), 0);
-    const totalSqft = totalSqm * 10.7639;
+    // Headline is the net job area — everything measured, less everything cut
+    // out of it. This is the number someone orders against.
+    const totalSqft = measured.reduce((s, z) => s + zoneNetSqft(z), 0);
+    const totalSqm = totalSqft / 10.7639;
     const bandSqft = 2 * Math.sqrt(
-      measured.reduce((s, z) => { const v = areaSigmaSqm(z.pins); return s + v * v; }, 0)
+      drawn.reduce((s, z) => { const v = areaSigmaSqm(z.pins); return s + v * v; }, 0)
     ) * 10.7639;
 
     g.fillStyle = '#2d6a2d';
@@ -2025,7 +2328,11 @@
     g.globalAlpha = 0.7;
     g.fillStyle = '#ffffff';
     g.font = `700 24px ${F}`;
-    g.fillText(multi ? `TOTAL AREA · ${measured.length} ZONES` : 'ESTIMATED AREA', W / 2, headH + 60);
+    g.fillText(
+      cuts.length
+        ? `NET AREA · ${cuts.length} CUT-OUT${cuts.length !== 1 ? 'S' : ''} REMOVED`
+        : multi ? `TOTAL AREA · ${measured.length} ZONES` : 'ESTIMATED AREA',
+      W / 2, headH + 60);
     g.globalAlpha = 1;
 
     g.fillStyle = '#c8a84b';
@@ -2087,9 +2394,10 @@
       g.drawImage(cap.canvas, dx, dy, dw, dh);
       cap.zones.forEach(z => {
         drawPolygon(g, z.pts.map(p => ({ x: dx + p.x * s, y: dy + p.y * s })), {
-          fill: z.active ? 'rgba(45,106,45,0.28)' : 'rgba(30,30,30,0.22)',
-          stroke: z.active ? '#7ede7e' : '#dddddd',
-          width: 4, dot: 15, halo: true, numbered: z.active,
+          // Cut-outs read as holes, in red, whether or not they're selected.
+          fill: z.cut ? 'rgba(192,57,43,0.34)' : z.active ? 'rgba(45,106,45,0.28)' : 'rgba(30,30,30,0.22)',
+          stroke: z.cut ? '#ff6b5a' : z.active ? '#7ede7e' : '#dddddd',
+          width: 4, dot: 15, halo: true, numbered: z.active && !z.cut,
         });
       });
     } else {
@@ -2108,8 +2416,10 @@
       g.textAlign = 'left';
       g.fillStyle = '#1a1a1a';
       g.font = `700 30px ${F}`;
-      g.fillText('Zones', 40, cursorY);
+      g.fillText(cuts.length ? 'Areas and cut-outs' : 'Zones', 40, cursorY);
       cursorY += 40;
+      // Measured areas at their walked size, then each cut-out as a negative
+      // line, so the total below can be checked by eye.
       measured.forEach(z => {
         g.fillStyle = '#555';
         g.font = `400 26px ${F}`;
@@ -2119,6 +2429,19 @@
         g.font = `700 26px ${F}`;
         g.textAlign = 'right';
         g.fillText(`${Math.round(zoneSqft(z)).toLocaleString()} sq ft`, W - 40, cursorY);
+        cursorY += 40;
+      });
+      cuts.forEach(z => {
+        // What it actually removes, which is the overlap, not its full size.
+        const removed = measured.reduce((s, a) => s + overlapSqm(a.pins, z.pins) * 10.7639, 0);
+        g.fillStyle = '#555';
+        g.font = `400 26px ${F}`;
+        g.textAlign = 'left';
+        g.fillText(`${z.name} (cut out)`, 40, cursorY);
+        g.fillStyle = '#c0392b';
+        g.font = `700 26px ${F}`;
+        g.textAlign = 'right';
+        g.fillText(`− ${Math.round(removed).toLocaleString()} sq ft`, W - 40, cursorY);
         cursorY += 40;
       });
       g.textAlign = 'left';
@@ -2175,7 +2498,7 @@
 
     // footer meta
     g.textAlign = 'left';
-    const allPins = measured.flatMap(z => z.pins);
+    const allPins = drawn.flatMap(z => z.pins);
     const avgAccFt = allPins.reduce((s, p) => s + p.accuracy, 0) / allPins.length * M_TO_FT;
     const tapped = allPins.filter(p => p.src === 'map').length;
     const srcNote = tapped === allPins.length ? 'placed on satellite imagery'
@@ -2247,6 +2570,7 @@
         nextZoneId: state.nextZoneId,
         nextPinId: state.nextPinId,
         jobLabel: jobLabelInput.value,
+        mapLocked: state.mapLocked,
       }));
     } catch (e) { /* storage unavailable or full — not fatal */ }
   }
@@ -2262,6 +2586,8 @@
 
     if (saved.v === 2 && Array.isArray(saved.zones) && saved.zones.length) {
       state.zones = saved.zones;
+      // Jobs saved before cut-outs existed have no mode; they were all areas.
+      state.zones.forEach(z => { if (!z.mode) z.mode = 'area'; });
       state.activeZoneId = saved.activeZoneId;
       state.nextZoneId = saved.nextZoneId || state.zones.length + 1;
       state.nextPinId = saved.nextPinId ||
@@ -2280,6 +2606,7 @@
     }
 
     if (saved.jobLabel) jobLabelInput.value = saved.jobLabel;
+    if (saved.mapLocked) state.mapLocked = true;
     return true;
   }
 
