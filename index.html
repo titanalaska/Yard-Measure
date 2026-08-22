@@ -1171,7 +1171,13 @@
 
   /* The dot stays 28px so a tight shape stays readable, but ::before widens
      the grabbable area to ~46px — the usual reason the map moves instead of
-     the pin is a finger landing just outside the dot. */
+     the pin is a finger landing just outside the dot.
+     ::before anchors to the marker's own `position: absolute`, which MapLibre
+     sets. Do NOT add `position: relative` here: this stylesheet loads after
+     maplibre-gl.css at equal specificity, so it wins, and a relatively
+     positioned marker falls back into normal flow. The markers then stack
+     down the page one height apart instead of tracking the map — pin 1 looks
+     right, pin 2 is 28px out, pin 3 is 56px, and so on. */
   .map-pin-marker::before {
     content: '';
     position: absolute;
@@ -1180,7 +1186,6 @@
   }
 
   .map-pin-marker {
-    position: relative;
     width: 28px;
     height: 28px;
     border-radius: 50%;
