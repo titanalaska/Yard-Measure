@@ -1583,6 +1583,16 @@
   <div id="layers-total" class="layers-total" style="display:none;"></div>
 </div>
 
+<div id="snow-section" style="display:none;">
+  <div class="section-header">
+    <span class="section-title">Snow</span>
+    <span class="pin-count" id="snow-count">0 zones</span>
+  </div>
+  <div id="snow-totals"></div>
+  <div id="snow-storage" class="layers-total"></div>
+  <div id="snow-settings"></div>
+</div>
+
 <div id="snapshot-section">
   <input type="text" id="job-label" placeholder="Job name or address (optional)" maxlength="60">
 </div>
@@ -1703,6 +1713,11 @@
   const layersCountEl = document.getElementById('layers-count');
   const layersTotalEl = document.getElementById('layers-total');
   const addLayerBtn = document.getElementById('add-layer-btn');
+  const snowSection = document.getElementById('snow-section');
+  const snowTotalsEl = document.getElementById('snow-totals');
+  const snowStorageEl = document.getElementById('snow-storage');
+  const snowSettingsEl = document.getElementById('snow-settings');
+  const snowCountEl = document.getElementById('snow-count');
   const tapModeBtn = document.getElementById('tap-mode-btn');
   const mapHint = document.getElementById('map-hint');
   const mapEl = document.getElementById('yard-map');
@@ -2563,6 +2578,11 @@
   }
 
   function renderLayers() {
+    // Snow replaces materials outright rather than stacking below it: the
+    // panel below the map is scarce space on a phone. This also overrides
+    // whatever renderResult() set layersSection.display to just above in
+    // renderAll() — renderLayers() runs after it and has the final say.
+    if (isSnow()) { layersSection.style.display = 'none'; return; }
     const z = activeZone();
     const line = isLine(z);
     const layers = z.layers;
@@ -2709,6 +2729,109 @@
     if (!(sqft > 0) || !(rate > 0)) return null;
     return (sqft / 1000) * rate / 2000;
   }
+
+  function renderSnow() {
+    if (!isSnow()) { snowSection.style.display = 'none'; return; }
+    snowSection.style.display = 'block';
+    const s = clearedBySurface();
+    const n = state.zones.filter(isDrawn).length;
+    snowCountEl.textContent = `${n} zone${n !== 1 ? 's' : ''}`;
+
+    const ft = v => Math.round(v).toLocaleString();
+    const rows = [
+      ['Plow', s.plow],
+      ['Walk', s.walk],
+      ['Hand', s.hand],
+      ['Storage', s.storage],
+    ].filter(([, v]) => v > 0)
+     .map(([label, v]) => `<div class="layer-row1"><span>${label}</span><strong>${ft(v)} ft²</strong></div>`);
+
+    const runFt = snowLinearFt();
+    if (runFt > 0) rows.push(`<div class="layer-row1"><span>Runs</span><strong>${ft(runFt)} linear ft</strong></div>`);
+
+    // A run with no width is measured but cannot contribute area. Say so
+    // rather than letting it read as zero square feet of sidewalk.
+    const noWidth = state.zones.filter(z => isDrawn(z) && isLine(z) && !(parseFloat(z.widthFt) > 0));
+    if (noWidth.length) rows.push(`<div class="empty-state">${noWidth.length} run${noWidth.length !== 1 ? 's have' : ' has'} no width set — linear feet only, no area</div>`);
+
+    snowTotalsEl.innerHTML = rows.length ? rows.join('') : `<div class="empty-state">Measure a zone and set its surface</div>`;
+    renderSnowStorage();
+    renderSnowSettings();
+  }
+
+  // A removal clause changes what the storage number means, so the panel leads
+  // with a different figure. Same arithmetic either way — under a 48-hour
+  // clause "it fits" is not a reprieve, because the snow leaves regardless.
+  function renderSnowStorage() {
+    const vol = snowVolumeYd3();
+    const cap = storageCapacityYd3();
+    const yd = v => v.toFixed(1);
+
+    if (vol == null) {
+      snowStorageEl.innerHTML = `<div class="empty-state">Set an event depth and a compaction ratio for a volume</div>`;
+      return;
+    }
+
+    const removal = parseFloat(state.snowJob.removalWindowHrs);
+    const loads = haulLoads(vol);
+    const tons = iceControlTons();
+    let html;
+
+    if (removal > 0) {
+      html = `<strong>${yd(vol)} yd³ to remove</strong>`
+        + (loads != null ? ` · ${loads} load${loads !== 1 ? 's' : ''}` : '')
+        + `<br><span style="font-weight:400;">Contract removal within ${removal} hr — it leaves whether or not it fits</span>`
+        + (cap != null ? `<br><span style="font-weight:400;">Can stage ${yd(cap)} yd³ on site while working through it</span>` : '');
+    } else if (cap == null) {
+      html = `<strong>${yd(vol)} yd³ of snow</strong><br><span style="font-weight:400;">Measure a storage zone and set a packing factor to check whether it fits</span>`;
+    } else if (vol <= cap) {
+      html = `<strong>Fits</strong> — ${yd(vol)} yd³ into ${yd(cap)} yd³ of storage`;
+    } else {
+      const over = vol - cap;
+      const overLoads = haulLoads(over);
+      html = `<strong>Over by ${yd(over)} yd³</strong>`
+        + (overLoads != null ? ` · ${overLoads} load${overLoads !== 1 ? 's' : ''}` : '')
+        + `<br><span style="font-weight:400;">${yd(vol)} yd³ of snow, ${yd(cap)} yd³ of storage</span>`;
+    }
+
+    if (tons != null) html += `<br><span style="font-weight:400;">Ice control: ${tons.toFixed(2)} tons per application</span>`;
+    snowStorageEl.innerHTML = html;
+  }
+
+  function renderSnowSettings() {
+    const p = state.snowPrefs, j = state.snowJob;
+    const num = (cls, val, ph, step) =>
+      `<input type="number" class="${cls}" value="${escapeAttr(val ?? '')}" placeholder="${escapeAttr(ph)}" min="0" step="${step}" inputmode="decimal">`;
+
+    snowSettingsEl.innerHTML = `
+      <div class="layer-item">
+        <div class="layer-row1"><span>Event depth</span>${num('snow-eventDepthIn', j.eventDepthIn, 'in', '0.5')}</div>
+        <div class="layer-row1"><span>Pile height (finished, ft)</span>${num('snow-pileHeightFt', p.pileHeightFt, 'ft', '1')}</div>
+        <div class="layer-row1"><span>Packing factor <em>(a pile is a wedge, not a box)</em></span>${num('snow-packingFactor', p.packingFactor, 'e.g. 0.5', '0.05')}</div>
+        <div class="layer-row1"><span>Compaction <em>(fresh ÷ piled — 3 means 3 ft³ fresh becomes 1 ft³ piled)</em></span>${num('snow-compactionRatio', p.compactionRatio, 'e.g. 3', '0.5')}</div>
+        <div class="layer-row1"><span>Truck capacity</span>${num('snow-truckCapacityYd3', p.truckCapacityYd3, 'yd³', '1')}</div>
+        <div class="layer-row1"><span>Ice control rate</span>${num('snow-sandRateLbsPer1000', p.sandRateLbsPer1000, 'lb per 1,000 ft²', '1')}</div>
+        <div class="layer-row1"><span>Removal window <em>(blank if the contract has none)</em></span>${num('snow-removalWindowHrs', j.removalWindowHrs, 'hr', '1')}</div>
+        <div class="layer-row1"><span>Callout trigger</span>${num('snow-triggerDepthIn', j.triggerDepthIn, 'in', '0.5')}</div>
+      </div>`;
+  }
+
+  const SNOW_PREF_FIELDS = ['pileHeightFt', 'packingFactor', 'compactionRatio', 'truckCapacityYd3', 'sandRateLbsPer1000'];
+  const SNOW_JOB_FIELDS = ['eventDepthIn', 'removalWindowHrs', 'triggerDepthIn'];
+
+  snowSettingsEl.addEventListener('input', (e) => {
+    const cls = [...e.target.classList].find(c => c.startsWith('snow-'));
+    if (!cls) return;
+    const key = cls.slice(5);
+    if (SNOW_PREF_FIELDS.includes(key)) { state.snowPrefs[key] = e.target.value; saveSnowPrefs(); }
+    else if (SNOW_JOB_FIELDS.includes(key)) { state.snowJob[key] = e.target.value; saveState(); }
+    else return;
+    // Re-render only the verdict, never the inputs — rebuilding the inputs
+    // would blow away focus mid-keystroke, the same trap the material layers
+    // already avoid. The surface totals come from pins, not from these fields,
+    // so they cannot have changed here.
+    renderSnowStorage();
+  });
 
   // ── LIVE MAP (MapLibre + Alaska imagery) ─────────────
   // Real aerial imagery under the walked perimeter, so odd/notched shapes can
@@ -3746,6 +3869,7 @@
     renderPins();
     renderResult();
     renderLayers();
+    renderSnow();
     updateMapShape(opts);
     updateButtons();
   }
