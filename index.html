@@ -2824,7 +2824,13 @@
     if (!cls) return;
     const key = cls.slice(5);
     if (SNOW_PREF_FIELDS.includes(key)) { state.snowPrefs[key] = e.target.value; saveSnowPrefs(); }
-    else if (SNOW_JOB_FIELDS.includes(key)) { state.snowJob[key] = e.target.value; saveState(); }
+    else if (SNOW_JOB_FIELDS.includes(key)) {
+      state.snowJob[key] = e.target.value;
+      saveState();
+      // Terms stick; event depth does not — depth is a scenario being tested,
+      // not a contract fact.
+      if (key === 'removalWindowHrs' || key === 'triggerDepthIn') saveSnowTerms();
+    }
     else return;
     // Re-render only the verdict, never the inputs — rebuilding the inputs
     // would blow away focus mid-keystroke, the same trap the material layers
@@ -3989,6 +3995,33 @@
     } catch (e) { /* keep the defaults */ }
   }
 
+  // Contract terms cannot be a global preference — different customers, different
+  // terms — but retyping them per site is how the thirteenth site quietly ends up
+  // on the wrong trigger. So: a new job seeds from the last terms entered, and a
+  // saved job keeps its own.
+  const SNOW_TERMS_KEY = 'yardMeasureSnowTerms';
+
+  function saveSnowTerms() {
+    try {
+      localStorage.setItem(SNOW_TERMS_KEY, JSON.stringify({
+        removalWindowHrs: state.snowJob.removalWindowHrs,
+        triggerDepthIn: state.snowJob.triggerDepthIn,
+      }));
+    } catch (e) { /* storage unavailable or full — not fatal */ }
+  }
+
+  function loadSnowTerms() {
+    try {
+      const raw = localStorage.getItem(SNOW_TERMS_KEY);
+      if (!raw) return;
+      const t = JSON.parse(raw);
+      // Seed only what the current job has not already set, so reopening a
+      // saved job never has its own terms overwritten by stickiness.
+      if (!state.snowJob.removalWindowHrs) state.snowJob.removalWindowHrs = t.removalWindowHrs || '';
+      if (!state.snowJob.triggerDepthIn) state.snowJob.triggerDepthIn = t.triggerDepthIn || '';
+    } catch (e) { /* keep what is there */ }
+  }
+
   jobLabelInput.addEventListener('input', saveState);
 
   function saveState() {
@@ -4332,6 +4365,11 @@
       zones: state.zones,
       nextZoneId: state.nextZoneId,
       nextPinId: state.nextPinId,
+      // A job saved in snow reopens in snow. Without this, snow work opened in
+      // July shows the Materials panel and reads as though it vanished — the
+      // zone data is all still there, but nothing on screen says so.
+      season: state.season,
+      snowJob: { ...state.snowJob },
     };
   }
 
@@ -4372,7 +4410,17 @@
     state.jobId = job.id;
     state.jobStarted = job.started || job.savedAt;
     state.zones = job.zones || [];
-    state.zones.forEach(z => { if (!z.mode) z.mode = 'area'; });
+    state.zones.forEach(z => {
+      if (!z.mode) z.mode = 'area';
+      // Every consumer reads through surfaceOf(), so a missing surface is
+      // harmless today — but materialising it here keeps the two load paths
+      // (loadState and openJob) telling the same story about a zone.
+      if (!z.surface) z.surface = 'plow';
+    });
+    // A job saved before snow mode has no season; leave the app where it is
+    // rather than yanking a crew out of the season they are working in.
+    if (job.season) state.season = job.season;
+    if (job.snowJob) Object.assign(state.snowJob, job.snowJob);
     state.nextZoneId = job.nextZoneId || state.zones.length + 1;
     state.nextPinId = job.nextPinId ||
       state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
@@ -4471,6 +4519,10 @@
   // ── INIT ─────────────────────────────────────────────
   loadSnowPrefs();
   const restored = loadState();
+  // Must run after loadState(): stickiness only seeds fields the restored job
+  // left blank, and must land before the first renderAll() below or the
+  // seeded terms won't appear in the inputs until something else re-renders.
+  loadSnowTerms();
   // Work restored from before job history existed still needs an id, or it
   // could never be filed.
   if (!state.jobId) {
