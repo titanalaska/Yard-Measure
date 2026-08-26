@@ -1708,6 +1708,7 @@
       pins: [],
       layers: [],
       nextLayerId: 1,
+      surface: 'plow',
     };
     state.zones.push(z);
     return z;
@@ -1730,6 +1731,20 @@
   const MODE_ICON = { area: 'area', cut: 'cut', line: 'run' };
   const MODE_NOUN = { area: 'measured area', cut: 'cut-out', line: 'linear run' };
   const isSnow = () => state.season === 'snow';
+  // Surface is orthogonal to mode. Mode is geometry — is this a shape, a hole,
+  // or a run. Surface is who clears it and how, which is what separates a lot
+  // from a sidewalk from the stairs by the door when someone prices the job.
+  const SURFACES = ['plow', 'walk', 'hand', 'storage'];
+  const SURFACE_LABEL = { plow: 'Plow', walk: 'Walk', hand: 'Hand', storage: 'Storage' };
+  const SURFACE_NOUN = {
+    plow: 'machine-cleared',
+    walk: 'shovel or blower',
+    hand: 'hand-cleared — stairs and anywhere a machine cannot reach',
+    storage: 'snow storage — filled, not cleared',
+  };
+  const surfaceOf = z => z.surface || 'plow';
+  // Storage along a line is meaningless: you do not stack snow down a stripe.
+  const surfacesFor = z => (isLine(z) ? ['plow', 'walk', 'hand'] : SURFACES);
   // A run needs two ends; a shape needs three corners.
   const minPins = z => (isLine(z) ? 2 : 3);
   const isDrawn = z => z.pins.length >= minPins(z);
@@ -1808,7 +1823,10 @@
       else if (line) label = `${Math.round(zoneLenFt(z)).toLocaleString()} ft`;
       else label = `${cut ? '−' : ''}${Math.round(cut ? zoneSqft(z) : zoneNetSqft(z)).toLocaleString()} ft²`;
       const acts = active
-        ? `<button class="chip-act" data-act="mode" title="Switch between area, cut-out and run">${icon(MODE_ICON[z.mode] || MODE_ICON.area, 'ic-sm')}</button>` +
+        ? (isSnow() && !isCut(z)
+            ? `<button class="chip-act" data-act="surface" title="Change surface">${SURFACE_LABEL[surfaceOf(z)]}</button>`
+            : '') +
+          `<button class="chip-act" data-act="mode" title="Switch between area, cut-out and run">${icon(MODE_ICON[z.mode] || MODE_ICON.area, 'ic-sm')}</button>` +
           `<button class="chip-act" data-act="rename" title="Rename">${icon('edit','ic-sm')}</button>` +
           (n > 1 ? `<button class="chip-act" data-act="delete" title="Delete zone">${icon('x','ic-sm')}</button>` : '')
         : '';
@@ -1842,9 +1860,22 @@
     const zone = state.zones.find(z => z.id === Number(chip.dataset.zone));
     if (!zone) return;
 
+    if (act === 'surface') {
+      const list = surfacesFor(zone);
+      const i = list.indexOf(surfaceOf(zone));
+      zone.surface = list[(i + 1) % list.length];
+      renderAll();
+      saveState();
+      showToast(`"${zone.name}" is ${SURFACE_NOUN[zone.surface]}`);
+      return;
+    }
     if (act === 'mode') {
       const was = zone.mode;
       zone.mode = MODES[(MODES.indexOf(zone.mode) + 1) % MODES.length];
+      // A run cannot be storage, so a shape sitting on storage that becomes a
+      // run has to land somewhere valid rather than silently keeping a surface
+      // nothing will ever count.
+      if (!surfacesFor(zone).includes(surfaceOf(zone))) zone.surface = 'plow';
       // A cut-out is a hole in the ground, not ground of its own — it can't
       // carry its own material order. Switching between area and run changes
       // what a layer even means (volume vs. length), so those clear too.
@@ -3671,6 +3702,10 @@
       state.zones = saved.zones;
       // Jobs saved before cut-outs existed have no mode; they were all areas.
       state.zones.forEach(z => { if (!z.mode) z.mode = 'area'; });
+      // Jobs saved before snow mode carry no surface; they were summer work,
+      // and plow is the harmless default since nothing reads it until the
+      // season is switched.
+      state.zones.forEach(z => { if (!z.surface) z.surface = 'plow'; });
       state.activeZoneId = saved.activeZoneId;
       state.nextZoneId = saved.nextZoneId || state.zones.length + 1;
       state.nextPinId = saved.nextPinId ||
