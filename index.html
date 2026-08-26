@@ -3546,6 +3546,20 @@
     if (zoneRows) H += 46 + zoneRows * 40 + 20;
     if (runRows) H += 46 + runRows * 40 + 20;
     if (materialRows.length) H += 46 + materialRows.length * 42 + 60;
+    // Snow block height — mirrors the row-counting the sections above already
+    // do, sized to the exact increments its drawing code below uses. Without
+    // this the card's canvas height is fixed before the snow block ever
+    // draws, and everything past the bottom edge (the storage verdict, ice
+    // control, trigger note, even the footer) is silently cropped out of the
+    // exported PNG rather than erroring.
+    if (isSnow()) {
+      const snowSurfaceH = clearedBySurface();
+      const surfaceRowsH = SURFACES.filter(k => snowSurfaceH[k] > 0).length;
+      H += 40 + surfaceRowsH * 42;
+      if (snowVolumeYd3() != null) H += 44;
+      if (iceControlTons() != null) H += 42;
+      if (parseFloat(state.snowJob.triggerDepthIn) > 0 || parseFloat(state.snowJob.eventDepthIn) > 0) H += 40;
+    }
     H += 120; // footer
 
     const c = document.createElement('canvas');
@@ -3754,7 +3768,7 @@
     }
 
     // materials needed
-    if (materialRows.length) {
+    if (!isSnow() && materialRows.length) {
       g.textAlign = 'left';
       g.fillStyle = '#1a1a1a';
       g.font = `700 30px ${F}`;
@@ -3812,6 +3826,88 @@
         cursorY += 44;
       }
       cursorY += 16;
+    }
+
+    // snow — surfaces stay separate, because lot, sidewalk and stair work are
+    // separate line items to whoever prices this.
+    if (isSnow()) {
+      const s = clearedBySurface();
+      const ftv = v => Math.round(v).toLocaleString();
+      g.textAlign = 'left';
+      g.fillStyle = '#1a1a1a';
+      g.font = `700 30px ${F}`;
+      g.fillText('Snow', 40, cursorY);
+      cursorY += 40;
+
+      [['Plow', s.plow], ['Walk', s.walk], ['Hand', s.hand], ['Storage', s.storage]]
+        .filter(([, v]) => v > 0)
+        .forEach(([label, v]) => {
+          g.fillStyle = '#555';
+          g.font = `400 26px ${F}`;
+          g.textAlign = 'left';
+          g.fillText(label, 40, cursorY);
+          g.fillStyle = label === 'Storage' ? '#1c6fb0' : '#2d6a2d';
+          g.font = `700 26px ${F}`;
+          g.textAlign = 'right';
+          g.fillText(`${ftv(v)} ft²`, W - 40, cursorY);
+          cursorY += 42;
+        });
+
+      const vol = snowVolumeYd3(), cap = storageCapacityYd3();
+      const removal = parseFloat(state.snowJob.removalWindowHrs);
+      if (vol != null) {
+        const loads = haulLoads(vol);
+        let left, right;
+        if (removal > 0) {
+          left = `To remove (within ${removal} hr)`;
+          right = `${vol.toFixed(1)} yd³${loads != null ? ` / ${loads} loads` : ''}`;
+        } else if (cap != null && vol > cap) {
+          const over = vol - cap, ol = haulLoads(over);
+          left = 'Over storage by';
+          right = `${over.toFixed(1)} yd³${ol != null ? ` / ${ol} loads` : ''}`;
+        } else if (cap != null) {
+          left = 'Fits on site';
+          right = `${vol.toFixed(1)} yd³ of ${cap.toFixed(1)} yd³`;
+        } else {
+          left = 'Snow volume';
+          right = `${vol.toFixed(1)} yd³`;
+        }
+        g.textAlign = 'left';
+        g.fillStyle = '#2d6a2d';
+        g.font = `800 28px ${F}`;
+        g.fillText(left, 40, cursorY + 6);
+        g.textAlign = 'right';
+        g.fillText(right, W - 40, cursorY + 6);
+        cursorY += 44;
+      }
+
+      const tons = iceControlTons();
+      if (tons != null) {
+        g.fillStyle = '#555';
+        g.font = `400 26px ${F}`;
+        g.textAlign = 'left';
+        g.fillText('Ice control, per application', 40, cursorY);
+        g.fillStyle = '#2d6a2d';
+        g.font = `700 26px ${F}`;
+        g.textAlign = 'right';
+        g.fillText(`${tons.toFixed(2)} t`, W - 40, cursorY);
+        cursorY += 42;
+      }
+
+      // Contract terms ride on the card so they do not get lost between the
+      // walk and the estimate.
+      const trig = parseFloat(state.snowJob.triggerDepthIn);
+      const depth = parseFloat(state.snowJob.eventDepthIn);
+      const notes = [];
+      if (trig > 0) notes.push(`${trig}" callout trigger`);
+      if (depth > 0) notes.push(`quantities at a ${depth}" event`);
+      if (notes.length) {
+        g.fillStyle = '#555';
+        g.font = `400 24px ${F}`;
+        g.textAlign = 'left';
+        g.fillText(notes.join(' · '), 40, cursorY);
+        cursorY += 40;
+      }
     }
 
     // footer meta
@@ -4115,8 +4211,58 @@
     return lines.join('\n');
   }
 
+  function snowSummaryText() {
+    const s = clearedBySurface();
+    const ft = v => Math.round(v).toLocaleString();
+    const lines = [jobTitle(), new Date().toLocaleString(), '', 'SNOW'];
+
+    state.zones.filter(isDrawn).filter(z => !isCut(z)).forEach(z => {
+      const sqft = zoneSnowSqft(z);
+      const bits = [`${SURFACE_LABEL[surfaceOf(z)]}`];
+      if (isLine(z)) bits.push(`${ft(zoneLenFt(z))} linear ft`);
+      if (sqft > 0) bits.push(`${ft(sqft)} sq ft`);
+      else if (isLine(z)) bits.push('no width set — no area');
+      lines.push(`${z.name}: ${bits.join(' · ')}`);
+    });
+
+    lines.push('');
+    if (s.plow > 0) lines.push(`PLOW: ${ft(s.plow)} sq ft`);
+    if (s.walk > 0) lines.push(`WALK: ${ft(s.walk)} sq ft`);
+    if (s.hand > 0) lines.push(`HAND: ${ft(s.hand)} sq ft`);
+    if (s.storage > 0) lines.push(`STORAGE: ${ft(s.storage)} sq ft`);
+
+    const vol = snowVolumeYd3(), cap = storageCapacityYd3();
+    const removal = parseFloat(state.snowJob.removalWindowHrs);
+    if (vol != null) {
+      const loads = haulLoads(vol);
+      if (removal > 0) {
+        lines.push(`TO REMOVE: ${vol.toFixed(1)} yd³${loads != null ? ` / ${loads} loads` : ''} within ${removal} hr`);
+        if (cap != null) lines.push(`  can stage ${cap.toFixed(1)} yd³ on site`);
+      } else if (cap != null && vol > cap) {
+        const over = vol - cap, ol = haulLoads(over);
+        lines.push(`OVER STORAGE by ${over.toFixed(1)} yd³${ol != null ? ` / ${ol} loads` : ''}`);
+      } else if (cap != null) {
+        lines.push(`FITS: ${vol.toFixed(1)} yd³ into ${cap.toFixed(1)} yd³`);
+      } else {
+        lines.push(`SNOW: ${vol.toFixed(1)} yd³`);
+      }
+    }
+
+    const tons = iceControlTons();
+    if (tons != null) lines.push(`ICE CONTROL: ${tons.toFixed(2)} tons per application`);
+
+    // Contract terms travel with the measurement — a 1-inch trigger is exactly
+    // the sort of thing that gets lost between the walk and the estimate.
+    const trig = parseFloat(state.snowJob.triggerDepthIn);
+    if (trig > 0) lines.push(`TRIGGER: ${trig}" callout`);
+
+    const depth = parseFloat(state.snowJob.eventDepthIn);
+    if (depth > 0) lines.push(`(quantities at a ${depth}" event)`);
+    return lines.join('\n');
+  }
+
   copyBtn.addEventListener('click', async () => {
-    const text = jobSummaryText();
+    const text = isSnow() ? snowSummaryText() : jobSummaryText();
     try {
       await navigator.clipboard.writeText(text);
       showToast('Copied — paste into your bid');
