@@ -1271,3 +1271,155 @@ Expected: `"PASS …"`.
 git add index.html
 git commit -m "Carry season and contract terms through the saved-job path"
 ```
+
+---
+
+### Task 8: Stop the headline totals adding storage to cleared ground
+
+Added mid-execution. The Task 6 implementer's mandated visual check of the
+snapshot PNG revealed that the card's headline sums square footage across every
+area zone — including snow-storage zones. On a real site that read
+`Plow 11,542 + Storage 2,440 = 13,982 sq ft` under the words **TOTAL AREA**.
+
+This is a wrong number on the deliverable. Storage is ground snow is pushed
+*onto*, not ground that gets cleared, and the spec is explicit that storage
+"neither adds to nor subtracts from cleared area" and that surfaces are "kept
+separate and never summed." Someone pricing off that headline overstates the
+cleared area by the whole storage footprint — 21% on the example above.
+
+**The defect predates snow mode** (`jobSqft()` has always summed every area
+zone, which was correct when every area zone was ground you worked). Snow mode
+introduced the first surface that is measured but not cleared, which is what
+makes the old behaviour wrong now.
+
+**Storage must remain visible** — it is still reported as its own row in the
+Snow panel and both exports. This task stops it being *added into* cleared
+totals; it does not hide it.
+
+**Files:**
+- Modify: `index.html` — `jobSqft()` (~line 1820), `renderResult()` job-total (~line 2422), `exportSnapshot()` measured/headline (~lines 3509, 3611)
+
+**Interfaces:**
+- Consumes: `isSnow()` (Task 1), `surfaceOf(z)` (Task 2)
+- Produces: no new exports. `jobSqft()` gains a documented season-dependent meaning.
+
+- [ ] **Step 1: Exclude storage from the job square footage in snow**
+
+Replace `jobSqft()`:
+
+```js
+  // In summer every area zone is ground being worked, so the plain sum is the
+  // job. Snow introduces the first surface that is measured but never cleared:
+  // a storage zone is where snow gets pushed TO. Adding it to cleared ground
+  // overstates the work, and this number headlines the card someone prices
+  // from — so in snow it counts cleared surfaces only. Storage is still
+  // reported, on its own row, by the Snow panel and both exports.
+  function jobSqft() {
+    return state.zones
+      .filter(z => !(isSnow() && surfaceOf(z) === 'storage'))
+      .reduce((s, z) => s + zoneNetSqft(z), 0);
+  }
+```
+
+- [ ] **Step 2: Say "cleared" on screen in snow**
+
+In `renderResult()`, in the `if (multi)` block, replace the `areas` bit push:
+
+```js
+      const areas = state.zones.filter(x =>
+        x.mode === 'area' && isDrawn(x) && !(isSnow() && surfaceOf(x) === 'storage')).length;
+```
+
+and change the label so a smaller number is self-explaining rather than
+alarming — a user who sees cleared area drop when switching to snow must be
+told why, not left to wonder where their storage zone went:
+
+```js
+      if (areas) bits.push(`<b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> ${isSnow() ? 'cleared across' : 'across'} ${areas} area${areas !== 1 ? 's' : ''}`
+        + (nCuts ? `, ${nCuts} cut-out${nCuts !== 1 ? 's' : ''} removed` : ''));
+```
+
+- [ ] **Step 3: Exclude storage from the snapshot's measured set**
+
+In `exportSnapshot()`, replace the `measured` filter so the headline number, the
+zone rows, and the range all agree with each other:
+
+```js
+    // Storage is measured but not cleared — see jobSqft(). Excluding it here
+    // keeps the headline, the per-zone rows and the range consistent; the Snow
+    // block below still reports storage on its own row.
+    const measured = drawn.filter(z => z.mode === 'area' && !(isSnow() && surfaceOf(z) === 'storage'));
+```
+
+- [ ] **Step 4: Label the snapshot headline honestly in snow**
+
+In the same function, in the `g.fillText(...)` headline-label call, replace the
+`multi ? ...` arm:
+
+```js
+          : multi ? `${isSnow() ? 'CLEARED' : 'TOTAL'} AREA · ${measured.length} ZONES`
+                  : (isSnow() ? 'CLEARED AREA' : 'ESTIMATED AREA'),
+```
+
+- [ ] **Step 5: Verify storage is excluded in snow and included in summer**
+
+Draw two area zones: one plow, one storage, with known separate footprints.
+Run in `javascript_tool`:
+
+```js
+(() => {
+  const s = clearedBySurface();
+  if (!(s.plow > 0) || !(s.storage > 0))
+    throw new Error('draw one plow zone AND one storage zone first — this check is vacuous without both');
+
+  state.season = 'snow';
+  const snowTotal = jobSqft();
+  state.season = 'summer';
+  const summerTotal = jobSqft();
+
+  if (Math.abs(summerTotal - (snowTotal + s.storage)) > 1)
+    throw new Error(`summer total should exceed snow total by exactly the storage footprint. summer=${summerTotal} snow=${snowTotal} storage=${s.storage}`);
+  if (Math.abs(snowTotal - s.plow) > 1)
+    throw new Error(`snow total should equal cleared plow area. snow=${snowTotal} plow=${s.plow}`);
+
+  state.season = 'snow';
+  return `PASS — summer ${Math.round(summerTotal)}, snow ${Math.round(snowTotal)}, storage ${Math.round(s.storage)} excluded`;
+})()
+```
+
+Expected: `"PASS …"`. Do not tick this off on the "draw both zones" throw.
+
+- [ ] **Step 6: Verify the summer card is unchanged, and look at both**
+
+Export a snapshot in summer, then in snow, and **open both PNGs**.
+
+- Summer: headline label and number identical to before this task.
+- Snow: headline reads `CLEARED AREA`, its number excludes the storage zone, and
+  the Snow block still lists Storage on its own row.
+
+Report what both cards showed. The assertion in Step 5 proves the arithmetic;
+only the images prove the card is honest.
+
+- [ ] **Step 7: Round the depths printed on the exports**
+
+Task 6's review found event depth printed raw, so a float-tainted value renders
+as `83.72410490751899"` on a document someone prices from. In BOTH
+`snowSummaryText()` and the canvas notes line in `exportSnapshot()`, format the
+two depths to at most one decimal, dropping a trailing `.0`:
+
+```js
+  // A depth is a field measurement, not a computed value — one decimal is more
+  // precision than anyone reads off a snow stake, and a raw float on a priced
+  // document looks like a defect.
+  const fmtIn = v => (Math.round(v * 10) / 10).toString();
+```
+
+Use `fmtIn(trig)` and `fmtIn(depth)` everywhere those two currently interpolate
+raw. Do not change how they are stored or calculated — display only.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add index.html
+git commit -m "Stop headline totals adding snow storage to cleared ground"
+```
