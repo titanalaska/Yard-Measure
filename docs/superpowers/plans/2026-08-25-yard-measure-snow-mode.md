@@ -642,10 +642,14 @@ Immediately after the closing `</div>` of `#layers-section`:
 
 - [ ] **Step 2: Swap the sections by season**
 
-`renderLayers()` already owns `layersSection.style.display`, setting it at three
-points (`index.html:2285`, `:2298`, `:2326`). Do **not** set it from
-`renderAll()` as well — the two would fight. Guard at the top of
-`renderLayers()` instead, immediately after the function's opening line:
+`layersSection.style.display` is already owned by **`renderResult()`**, which
+sets it at three points. (An earlier draft of this plan wrongly attributed those
+to `renderLayers()` — corrected 2026-08-26 after the Task 5 implementer checked.)
+Do **not** set it from `renderAll()` as well — the two would fight.
+
+Guard at the top of `renderLayers()` instead, immediately after the function's
+opening line. This works because `renderAll()` calls `renderResult()` *before*
+`renderLayers()`, so the guard's `display = 'none'` lands last and wins:
 
 ```js
     // Snow replaces materials outright rather than stacking below it: the
@@ -1044,27 +1048,31 @@ something to print.
 
 Do **not** verify this by listening for an `error` event after the fact — a
 listener registered after the snapshot has run observes nothing and always
-reports success. Call the builder inside a `try` and assert on what it returned.
-Substitute the snapshot builder's actual function name for `buildSnapshot`:
+reports success.
+
+The builder is `async function exportSnapshot()` (`index.html:3507`). It draws
+to a canvas, converts to a blob, and then either calls `navigator.share` or
+triggers a download. **It returns nothing**, so there is no data URL to assert
+on. What this step guards against is the snow block throwing — an undefined
+variable or a null dereference that breaks the snapshot entirely — so assert
+that it completes:
 
 ```js
-(() => {
-  let url;
-  try { url = buildSnapshot(); }
-  catch (e) { throw new Error('snapshot threw in snow mode: ' + e.message); }
-  if (typeof url !== 'string' || !url.startsWith('data:image/'))
-    throw new Error('snapshot did not return an image data URL');
-  if (url.length < 5000) throw new Error('snapshot canvas looks empty (' + url.length + ' chars)');
-  return 'PASS — snapshot built in snow mode, ' + url.length + ' chars';
+(async () => {
+  if (!isSnow()) throw new Error('switch to snow mode first');
+  try { await exportSnapshot(); }
+  catch (e) { throw new Error('exportSnapshot threw in snow mode: ' + e.message); }
+  return 'PASS — exportSnapshot completed in snow mode without throwing';
 })()
 ```
 
-If the builder draws to a canvas without returning a URL, call it and then
-assert on `canvas.toDataURL()` for that canvas instead. Either way the
-assertion must inspect a real artifact.
+Expect this to trigger a share sheet or a file download in the preview browser.
+That is the function working normally, not a failure — dismiss it.
 
-Expected: `"PASS …"`, **and** a visually correct card judged by eye — the
-assertion proves it rendered something, not that it rendered correctly.
+Then **open the produced PNG and look at it.** The assertion only proves the
+code path survives; it says nothing about whether the card is laid out
+correctly, whether the surface rows are legible, or whether the storage verdict
+reads sensibly. Confirm by eye, and say in your report what the card showed.
 
 - [ ] **Step 6: Commit**
 
