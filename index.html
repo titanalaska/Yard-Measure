@@ -274,6 +274,10 @@
 
   .hdr-btn:active { transform: scale(0.94); background: rgba(255,255,255,0.3); }
   #theme-btn { padding: 0 var(--s2); }
+  #season-btn { padding: 0 var(--s2); }
+  /* Snow season is a standing mode, not a momentary press — the tint has to
+     persist after the finger lifts, unlike the shared :active flash above. */
+  .hdr-btn.active { background: rgba(255,255,255,0.32); border-color: rgba(255,255,255,0.75); }
 
   /* JOBS SHEET */
   #jobs-overlay {
@@ -1421,6 +1425,7 @@
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
   <symbol id="i-collapse" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></symbol>
   <symbol id="i-fit" viewBox="0 0 24 24"><path d="M3 8V5a2 2 0 0 1 2-2h3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/><rect x="8" y="8" width="8" height="8" rx="1"/></symbol>
+  <symbol id="i-snow" viewBox="0 0 24 24"><path d="M12 2v20M4.9 6.5l14.2 11M19.1 6.5L4.9 17.5"/><path d="M12 6l-2.5-2.5M12 6l2.5-2.5M12 18l-2.5 2.5M12 18l2.5 2.5"/></symbol>
 </defs></svg>
 
 <header>
@@ -1428,6 +1433,9 @@
   <h1>Yard Measure</h1>
   <button id="theme-btn" class="hdr-btn" type="button" title="Display mode">
     <svg class="ic"><use href="#i-auto" id="theme-icon"/></svg>
+  </button>
+  <button id="season-btn" class="hdr-btn" type="button" title="Summer / snow season">
+    <svg class="ic"><use href="#i-snow"/></svg>
   </button>
   <button id="jobs-btn" class="hdr-btn" type="button" title="Saved jobs">
     <svg class="ic"><use href="#i-jobs"/></svg><span>Jobs</span>
@@ -1634,6 +1642,10 @@
     resultOpen: false,
     crosshair: false,
     mapFull: false,
+    // Snow is a different season's job on the same ground. The flag changes
+    // only what is offered and what is reported — never how anything is
+    // measured, so a summer user who never touches it sees today's app.
+    season: 'summer',
   };
 
   const icon = (id, cls) => `<svg class="ic ${cls || ''}"><use href="#i-${id}"/></svg>`;
@@ -1717,6 +1729,7 @@
   const MODES = ['area', 'cut', 'line'];
   const MODE_ICON = { area: 'area', cut: 'cut', line: 'run' };
   const MODE_NOUN = { area: 'measured area', cut: 'cut-out', line: 'linear run' };
+  const isSnow = () => state.season === 'snow';
   // A run needs two ends; a shape needs three corners.
   const minPins = z => (isLine(z) ? 2 : 3);
   const isDrawn = z => z.pins.length >= minPins(z);
@@ -3639,6 +3652,7 @@
         theme: state.theme,
         resultOpen: state.resultOpen,
         crosshair: state.crosshair,
+        season: state.season,
       }));
     } catch (e) { /* storage unavailable or full — not fatal */ }
     syncCurrentJob();
@@ -3681,6 +3695,8 @@
     if (saved.theme) state.theme = saved.theme;
     if (saved.resultOpen) state.resultOpen = true;
     if (saved.crosshair) state.crosshair = true;
+    // Jobs saved before snow mode existed were all summer work.
+    if (saved.season === 'snow') state.season = 'snow';
     return true;
   }
 
@@ -3711,6 +3727,15 @@
     applyTheme();
     saveState();
     showToast(THEME_NAME[state.theme]);
+  });
+
+  const seasonBtn = document.getElementById('season-btn');
+  seasonBtn.addEventListener('click', () => {
+    state.season = isSnow() ? 'summer' : 'snow';
+    seasonBtn.classList.toggle('active', isSnow());
+    renderAll();
+    saveState();
+    showToast(isSnow() ? 'Snow season' : 'Summer season');
   });
 
   // ── RESULT BAR ───────────────────────────────────────
