@@ -170,24 +170,36 @@ In `loadState()`, after the `if (saved.crosshair) state.crosshair = true;` line:
 
 - [ ] **Step 6: Verify the flag round-trips and old jobs default to summer**
 
+**First draw a zone with at least three pins in the UI** (tap-to-add on the map
+is quickest). This is required, not optional: `loadState()` returns early unless
+the saved job has `v === 2` and a non-empty `zones` array, so with no zones the
+season-restore branch never executes and the assertion below would pass while
+proving nothing.
+
 Run in `javascript_tool`:
 
 ```js
 (() => {
-  localStorage.removeItem('yardMeasureState');
+  if (!state.zones.some(z => z.pins.length >= 3))
+    throw new Error('draw a 3-pin zone first — this check is vacuous without one');
   state.season = 'snow'; saveState();
   const back = JSON.parse(localStorage.getItem('yardMeasureState'));
   if (back.season !== 'snow') throw new Error('season not saved');
+  if (back.v !== 2 || !back.zones.length) throw new Error('saved job will not reach the restore branch');
   delete back.season;
   localStorage.setItem('yardMeasureState', JSON.stringify(back));
-  return 'PASS — saved, and a job with no season key is present for the reload check';
+  return 'PASS — a v2 job with zones and no season key is staged for the reload check';
 })()
 ```
 
 Expected: `"PASS …"`. Now reload the page and run:
 
 ```js
-state.season === 'summer' ? 'PASS' : (() => { throw new Error('a job with no season key must load as summer, got ' + state.season); })()
+(() => {
+  if (!state.zones.length) throw new Error('the staged job did not load — the check below would be vacuous');
+  if (state.season !== 'summer') throw new Error('a job with no season key must load as summer, got ' + state.season);
+  return 'PASS';
+})()
 ```
 
 Expected: `"PASS"`.
@@ -407,7 +419,7 @@ git commit -m "Let a snow run carry a width so a sidewalk yields area"
 
 **Interfaces:**
 - Consumes: `zoneSnowSqft` (Task 3), `surfaceOf` (Task 2), `isDrawn`, `isCut` (existing)
-- Produces: `state.snowPrefs`, `state.snowJob`, `clearedBySurface()` returning `{plow, walk, hand, storage}` in sq ft, `clearedSqft()` returning the sum of the three cleared surfaces, `storageCapacityYd3()`, `snowVolumeYd3()`, `haulLoads(yd3)`, `iceControlTons()`. Each of the four calculators returns `null` when an input it needs is unset, never `0` or `NaN`.
+- Produces: `state.snowPrefs`, `state.snowJob`, `clearedBySurface()` returning `{plow, walk, hand, storage}` in sq ft, `clearedSqft()` returning the sum of the three cleared surfaces, `snowLinearFt()` returning total linear feet of non-storage runs, `storageCapacityYd3()`, `snowVolumeYd3()`, `haulLoads(yd3)`, `iceControlTons()`. Each of the four calculators returns `null` when an input it needs is unset, never `0` or `NaN`. **Task 5 consumes `snowLinearFt()` — do not omit it.**
 
 - [ ] **Step 1: Add both settings objects to state**
 
@@ -1026,17 +1038,33 @@ Expected: `"PASS"`.
 
 - [ ] **Step 5: Confirm the snapshot renders without throwing**
 
-Trigger the snapshot from the UI in snow mode with at least one plow zone and one storage zone drawn. Then run in `javascript_tool`:
+Draw at least one plow zone and one storage zone, switch to snow, and set an
+event depth, packing factor and compaction ratio so the verdict line has
+something to print.
+
+Do **not** verify this by listening for an `error` event after the fact — a
+listener registered after the snapshot has run observes nothing and always
+reports success. Call the builder inside a `try` and assert on what it returned.
+Substitute the snapshot builder's actual function name for `buildSnapshot`:
 
 ```js
 (() => {
-  const errs = [];
-  window.addEventListener('error', e => errs.push(e.message), { once: true });
-  return errs.length ? (() => { throw new Error(errs.join('; ')); })() : 'PASS — no uncaught error during snapshot';
+  let url;
+  try { url = buildSnapshot(); }
+  catch (e) { throw new Error('snapshot threw in snow mode: ' + e.message); }
+  if (typeof url !== 'string' || !url.startsWith('data:image/'))
+    throw new Error('snapshot did not return an image data URL');
+  if (url.length < 5000) throw new Error('snapshot canvas looks empty (' + url.length + ' chars)');
+  return 'PASS — snapshot built in snow mode, ' + url.length + ' chars';
 })()
 ```
 
-Expected: `"PASS …"`, and a visually correct card.
+If the builder draws to a canvas without returning a URL, call it and then
+assert on `canvas.toDataURL()` for that canvas instead. Either way the
+assertion must inspect a real artifact.
+
+Expected: `"PASS …"`, **and** a visually correct card judged by eye — the
+assertion proves it rendered something, not that it rendered correctly.
 
 - [ ] **Step 6: Commit**
 
