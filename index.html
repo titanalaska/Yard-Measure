@@ -1646,6 +1646,23 @@
     // only what is offered and what is reported — never how anything is
     // measured, so a summer user who never touches it sees today's app.
     season: 'summer',
+    // Fleet and operating practice — these describe how Titan works, not a
+    // site, so they outlive any one job. Everything here except the pile
+    // height is a judgment call and ships empty on purpose: a number invented
+    // in code reads as fact six months later.
+    snowPrefs: {
+      pileHeightFt: 20,          // Titan's own working figure for a finished pile
+      packingFactor: '',
+      compactionRatio: '',
+      truckCapacityYd3: '',
+      sandRateLbsPer1000: '',
+    },
+    // The site and its contract.
+    snowJob: {
+      eventDepthIn: '',
+      removalWindowHrs: '',
+      triggerDepthIn: '',
+    },
   };
 
   const icon = (id, cls) => `<svg class="ic ${cls || ''}"><use href="#i-${id}"/></svg>`;
@@ -2633,6 +2650,64 @@
       return w > 0 ? zoneLenFt(z) * w : 0;
     }
     return zoneNetSqft(z);
+  }
+
+  function clearedBySurface() {
+    const out = { plow: 0, walk: 0, hand: 0, storage: 0 };
+    state.zones.filter(isDrawn).forEach(z => {
+      if (isCut(z)) return;   // a hole subtracts through its parent, not here
+      out[surfaceOf(z)] += zoneSnowSqft(z);
+    });
+    return out;
+  }
+
+  // Storage is deliberately excluded. A pile usually sits on ground that is
+  // also plowed — the same ground doing two jobs — so it neither adds to nor
+  // subtracts from what gets cleared.
+  function clearedSqft() {
+    const s = clearedBySurface();
+    return s.plow + s.walk + s.hand;
+  }
+
+  function snowLinearFt() {
+    return state.zones
+      .filter(z => isDrawn(z) && isLine(z) && surfaceOf(z) !== 'storage')
+      .reduce((s, z) => s + zoneLenFt(z), 0);
+  }
+
+  // A push-stacked pile is a ramped wedge sitting at its angle of repose, not
+  // a box filled to a uniform height — packingFactor is that discount.
+  function storageCapacityYd3() {
+    const sqft = clearedBySurface().storage;
+    const h = parseFloat(state.snowPrefs.pileHeightFt);
+    const f = parseFloat(state.snowPrefs.packingFactor);
+    if (!(sqft > 0) || !(h > 0) || !(f > 0)) return null;
+    return (sqft * h * f) / 27;
+  }
+
+  // compactionRatio is FRESH ÷ PILED. A ratio of 3 means three cubic feet of
+  // fresh snow becomes one once plowed and piled. The inverse reading is
+  // equally natural and wrong by a factor of nine, which is why the input
+  // label spells the direction out.
+  function snowVolumeYd3() {
+    const sqft = clearedSqft();
+    const depth = parseFloat(state.snowJob.eventDepthIn);
+    const ratio = parseFloat(state.snowPrefs.compactionRatio);
+    if (!(sqft > 0) || !(depth > 0) || !(ratio > 0)) return null;
+    return (sqft * (depth / 12)) / 27 / ratio;
+  }
+
+  function haulLoads(yd3) {
+    const cap = parseFloat(state.snowPrefs.truckCapacityYd3);
+    if (!(yd3 > 0) || !(cap > 0)) return null;
+    return Math.ceil(yd3 / cap);
+  }
+
+  function iceControlTons() {
+    const sqft = clearedSqft();
+    const rate = parseFloat(state.snowPrefs.sandRateLbsPer1000);
+    if (!(sqft > 0) || !(rate > 0)) return null;
+    return (sqft / 1000) * rate / 2000;
   }
 
   // ── LIVE MAP (MapLibre + Alaska imagery) ─────────────
@@ -3680,6 +3755,19 @@
   // backgrounding, or crash mid-job shouldn't lose the pins/layers already
   // captured, so every mutation is autosaved to localStorage.
   const STORAGE_KEY = 'yardMeasureState';
+  const SNOW_PREFS_KEY = 'yardMeasureSnowPrefs';
+
+  function saveSnowPrefs() {
+    try { localStorage.setItem(SNOW_PREFS_KEY, JSON.stringify(state.snowPrefs)); }
+    catch (e) { /* storage unavailable or full — not fatal */ }
+  }
+
+  function loadSnowPrefs() {
+    try {
+      const raw = localStorage.getItem(SNOW_PREFS_KEY);
+      if (raw) Object.assign(state.snowPrefs, JSON.parse(raw));
+    } catch (e) { /* keep the defaults */ }
+  }
 
   jobLabelInput.addEventListener('input', saveState);
 
@@ -3699,6 +3787,7 @@
         resultOpen: state.resultOpen,
         crosshair: state.crosshair,
         season: state.season,
+        snowJob: state.snowJob,
       }));
     } catch (e) { /* storage unavailable or full — not fatal */ }
     syncCurrentJob();
@@ -3747,6 +3836,7 @@
     if (saved.crosshair) state.crosshair = true;
     // Jobs saved before snow mode existed were all summer work.
     if (saved.season === 'snow') state.season = 'snow';
+    if (saved.snowJob) Object.assign(state.snowJob, saved.snowJob);
     return true;
   }
 
@@ -4109,6 +4199,7 @@
   }
 
   // ── INIT ─────────────────────────────────────────────
+  loadSnowPrefs();
   const restored = loadState();
   // Work restored from before job history existed still needs an id, or it
   // could never be filed.
