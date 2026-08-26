@@ -1709,6 +1709,7 @@
       layers: [],
       nextLayerId: 1,
       surface: 'plow',
+      widthFt: '',
     };
     state.zones.push(z);
     return z;
@@ -2618,6 +2619,20 @@
       html += `<br>${totalTons.toFixed(1)} tons${tonsVols.length < vols.length ? ' <span style="font-weight:400;">(layers with density set)</span>' : ''}`;
     }
     layersTotalEl.innerHTML = html;
+  }
+
+  // ── SNOW ─────────────────────────────────────────────
+  // A sidewalk is a run: two pins beats outlining four corners in the dark in
+  // February. Snow volume needs area, so a run carries a width and multiplies
+  // out. A run with no width still reports its linear feet — it contributes no
+  // area, and the panel says so rather than counting it as zero.
+  function zoneSnowSqft(z) {
+    if (isCut(z)) return 0;
+    if (isLine(z)) {
+      const w = parseFloat(z.widthFt);
+      return w > 0 ? zoneLenFt(z) * w : 0;
+    }
+    return zoneNetSqft(z);
   }
 
   // ── LIVE MAP (MapLibre + Alaska imagery) ─────────────
