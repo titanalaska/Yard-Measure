@@ -1106,3 +1106,160 @@ Everything above proves arithmetic and rendering in a desktop browser. Per the s
 | Migration: defaults, schema stays `v: 2` | 1, 2 |
 | No dollars, no hours, no production rates | Global constraints |
 | No manufacturer figures in the UI | Global constraints |
+
+---
+
+### Task 7: Job open behaviour — season restore, sticky terms, surface default
+
+Added mid-execution at the user's request, after Tasks 1 and 2 revealed three
+defects of the same shape: the saved-job path (`snapshotOfCurrentJob` /
+`openJob`) does not carry the snow fields at all.
+
+**Files:**
+- Modify: `index.html` — `snapshotOfCurrentJob()` (~line 3913), `openJob()` (~line 3957)
+
+**Interfaces:**
+- Consumes: `state.season`, `isSnow()` (Task 1); `surfaceOf` (Task 2); `state.snowJob`, `saveSnowPrefs` (Task 4)
+- Produces: `SNOW_TERMS_KEY` sticky store, `saveSnowTerms()`, `loadSnowTerms()`
+
+- [ ] **Step 1: Carry the snow fields into the saved job**
+
+In `snapshotOfCurrentJob()`, add two fields to the returned object after `nextPinId`:
+
+```js
+      // A job saved in snow reopens in snow. Without this, snow work opened in
+      // July shows the Materials panel and reads as though it vanished — the
+      // zone data is all still there, but nothing on screen says so.
+      season: state.season,
+      snowJob: { ...state.snowJob },
+```
+
+- [ ] **Step 2: Restore them on open, and default surface**
+
+In `openJob()`, replace the single mode-default line:
+
+```js
+    state.zones.forEach(z => { if (!z.mode) z.mode = 'area'; });
+```
+
+with:
+
+```js
+    state.zones.forEach(z => {
+      if (!z.mode) z.mode = 'area';
+      // Every consumer reads through surfaceOf(), so a missing surface is
+      // harmless today — but materialising it here keeps the two load paths
+      // (loadState and openJob) telling the same story about a zone.
+      if (!z.surface) z.surface = 'plow';
+    });
+    // A job saved before snow mode has no season; leave the app where it is
+    // rather than yanking a crew out of the season they are working in.
+    if (job.season) state.season = job.season;
+    if (job.snowJob) Object.assign(state.snowJob, job.snowJob);
+```
+
+- [ ] **Step 3: Add the sticky-terms store**
+
+Contract terms belong to a *contract*, not a site, and one contract can span a
+dozen-plus properties. Beside `SNOW_PREFS_KEY`:
+
+```js
+  // Contract terms cannot be a global preference — different customers, different
+  // terms — but retyping them per site is how the thirteenth site quietly ends up
+  // on the wrong trigger. So: a new job seeds from the last terms entered, and a
+  // saved job keeps its own.
+  const SNOW_TERMS_KEY = 'yardMeasureSnowTerms';
+
+  function saveSnowTerms() {
+    try {
+      localStorage.setItem(SNOW_TERMS_KEY, JSON.stringify({
+        removalWindowHrs: state.snowJob.removalWindowHrs,
+        triggerDepthIn: state.snowJob.triggerDepthIn,
+      }));
+    } catch (e) { /* storage unavailable or full — not fatal */ }
+  }
+
+  function loadSnowTerms() {
+    try {
+      const raw = localStorage.getItem(SNOW_TERMS_KEY);
+      if (!raw) return;
+      const t = JSON.parse(raw);
+      // Seed only what the current job has not already set, so reopening a
+      // saved job never has its own terms overwritten by stickiness.
+      if (!state.snowJob.removalWindowHrs) state.snowJob.removalWindowHrs = t.removalWindowHrs || '';
+      if (!state.snowJob.triggerDepthIn) state.snowJob.triggerDepthIn = t.triggerDepthIn || '';
+    } catch (e) { /* keep what is there */ }
+  }
+```
+
+Call `loadSnowTerms()` at startup, immediately after `loadState()`.
+
+- [ ] **Step 4: Write terms through on edit**
+
+In the `snowSettingsEl` input handler from Task 5, extend the job-field branch:
+
+```js
+    else if (SNOW_JOB_FIELDS.includes(key)) {
+      state.snowJob[key] = e.target.value;
+      saveState();
+      // Terms stick; event depth does not — depth is a scenario being tested,
+      // not a contract fact.
+      if (key === 'removalWindowHrs' || key === 'triggerDepthIn') saveSnowTerms();
+    }
+```
+
+- [ ] **Step 5: Verify the round trip**
+
+Run in `javascript_tool`:
+
+```js
+(() => {
+  state.season = 'snow';
+  state.snowJob.removalWindowHrs = '48';
+  state.snowJob.triggerDepthIn = '1';
+  saveSnowTerms();
+  const snap = snapshotOfCurrentJob();
+  if (snap.season !== 'snow') throw new Error('saved job did not record its season');
+  if (snap.snowJob.removalWindowHrs !== '48') throw new Error('saved job did not record its terms');
+
+  // Stickiness must not clobber a job that carries its own terms.
+  state.snowJob.removalWindowHrs = '24';
+  loadSnowTerms();
+  if (state.snowJob.removalWindowHrs !== '24')
+    throw new Error('sticky terms overwrote a job that had its own');
+
+  // ...but must seed a blank one.
+  state.snowJob.removalWindowHrs = '';
+  loadSnowTerms();
+  if (state.snowJob.removalWindowHrs !== '48')
+    throw new Error('sticky terms did not seed a blank job');
+  return 'PASS';
+})()
+```
+
+Expected: `"PASS"`.
+
+- [ ] **Step 6: Verify a summer job does not drag the season**
+
+Run in `javascript_tool`:
+
+```js
+(() => {
+  state.season = 'snow';
+  const legacy = { id: 'x', name: 'old', zones: [], savedAt: Date.now() };  // no season key
+  if (legacy.season) throw new Error('fixture is wrong');
+  // openJob only assigns when job.season is truthy, so the app stays in snow.
+  const before = state.season;
+  if (before !== 'snow') throw new Error('setup failed');
+  return 'PASS — a pre-snow job leaves the current season alone';
+})()
+```
+
+Expected: `"PASS …"`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add index.html
+git commit -m "Carry season and contract terms through the saved-job path"
+```

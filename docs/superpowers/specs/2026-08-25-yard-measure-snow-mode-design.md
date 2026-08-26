@@ -42,7 +42,14 @@ design for valley site conditions.
 
 ### Season
 
-`state.season`: `'summer' | 'snow'`, default `'summer'`, saved with the job.
+`state.season`: `'summer' | 'snow'`, default `'summer'`.
+
+**Sticky app-wide, but a saved job restores its own.** The flag persists like
+`theme` does, so it does not flip while a crew works through a run of sites in
+one session — that matters when a single contract spans a dozen-plus properties.
+A job saved in snow also records its season and restores it when reopened, so
+snow work reopened in July does not present the Materials panel and read as
+though it had vanished.
 
 It changes exactly three things:
 
@@ -128,6 +135,12 @@ facts carried alongside the measurement**, not inputs to a price.
   within a fixed window of an event. **Opt-in, default off.** At present exactly
   one Titan contract carries a removal clause, at 48 hours, so making it the
   default would misdescribe every other site.
+**Both are sticky.** A new job seeds them from the last values entered; a saved
+job reopened uses its own. One contract can span a dozen-plus properties — the
+ANTHC campus is roughly thirteen sites, all on the same 48-hour removal window
+and 1-inch trigger — and retyping two numbers per site is how the thirteenth
+site quietly ends up on the wrong trigger.
+
 - `job.triggerDepthIn` — the accumulation that obliges a callout. Recorded and
   printed on the export; **no math in v1**. It drives how many times a season a
   crew rolls out, and seasonal totals are out of scope. The same contract with
