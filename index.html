@@ -802,6 +802,12 @@
     padding: 16px 16px 0;
   }
 
+  /* Snow replaces the layers panel outright when the season is snow, so it
+     needs the same edge padding or it sits flush against the screen edge. */
+  #snow-section {
+    padding: 16px 16px 0;
+  }
+
   .layer-item {
     background: var(--surface);
     border-radius: 8px;
@@ -1588,6 +1594,7 @@
     <span class="section-title">Snow</span>
     <span class="pin-count" id="snow-count">0 zones</span>
   </div>
+  <div id="snow-widths"></div>
   <div id="snow-totals"></div>
   <div id="snow-storage" class="layers-total"></div>
   <div id="snow-settings"></div>
@@ -1714,6 +1721,7 @@
   const layersTotalEl = document.getElementById('layers-total');
   const addLayerBtn = document.getElementById('add-layer-btn');
   const snowSection = document.getElementById('snow-section');
+  const snowWidthsEl = document.getElementById('snow-widths');
   const snowTotalsEl = document.getElementById('snow-totals');
   const snowStorageEl = document.getElementById('snow-storage');
   const snowSettingsEl = document.getElementById('snow-settings');
@@ -2428,7 +2436,13 @@
       const nCuts = state.zones.filter(x => isCut(x) && isDrawn(x)).length;
       const nRuns = state.zones.filter(x => isLine(x) && isDrawn(x)).length;
       const bits = [];
-      if (areas) bits.push(`<b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> ${isSnow() ? 'cleared across' : 'across'} ${areas} area${areas !== 1 ? 's' : ''}`
+      // In snow this headline must equal the surface rows in the Snow panel
+      // below it (plow + walk + hand) — that's clearedSqft(), not jobSqft().
+      // jobSqft() sums only area-mode zones, so it silently drops the square
+      // footage of a width-bearing walk run, which is otherwise a real part
+      // of what got cleared.
+      const areaTotal = isSnow() ? clearedSqft() : jobSqft();
+      if (areas) bits.push(`<b>${Math.round(areaTotal).toLocaleString()} sq ft</b> ${isSnow() ? 'cleared across' : 'across'} ${areas} area${areas !== 1 ? 's' : ''}`
         + (nCuts ? `, ${nCuts} cut-out${nCuts !== 1 ? 's' : ''} removed` : ''));
       if (nRuns) bits.push(`<b>${Math.round(jobLinearFt()).toLocaleString()} ft</b> of run across ${nRuns}`);
       resultTotal.style.display = bits.length ? 'block' : 'none';
@@ -2747,10 +2761,48 @@
   function renderSnow() {
     if (!isSnow()) { snowSection.style.display = 'none'; return; }
     snowSection.style.display = 'block';
-    const s = clearedBySurface();
     const n = state.zones.filter(isDrawn).length;
     snowCountEl.textContent = `${n} zone${n !== 1 ? 's' : ''}`;
 
+    renderSnowWidths();
+    renderSnowTotals();
+    renderSnowStorage();
+    renderSnowSettings();
+  }
+
+  // A run is two pins and a typed width — outlining a 400-foot sidewalk in
+  // the dark in February isn't the field-speed win outlining a lot is. One
+  // row per line zone, labelled by name since a site can carry several runs.
+  function renderSnowWidths() {
+    const lines = state.zones.filter(z => isDrawn(z) && isLine(z));
+    if (!lines.length) { snowWidthsEl.innerHTML = ''; return; }
+    snowWidthsEl.innerHTML = lines.map(z => `
+      <div class="layer-item">
+        <div class="layer-row1">
+          <span>${escapeHtml(z.name)} <em>(${Math.round(zoneLenFt(z)).toLocaleString()} linear ft)</em></span>
+          <input type="number" class="snow-width-input" data-zone-id="${z.id}"
+                 value="${escapeAttr(z.widthFt ?? '')}" placeholder="width ft"
+                 min="0" step="0.5" inputmode="decimal">
+        </div>
+      </div>`).join('');
+  }
+
+  snowWidthsEl.addEventListener('input', (e) => {
+    if (!e.target.classList.contains('snow-width-input')) return;
+    const zone = state.zones.find(z => z.id === Number(e.target.dataset.zoneId));
+    if (!zone) return;
+    zone.widthFt = e.target.value;
+    saveState();
+    // Unlike the settings fields below, a width genuinely changes the
+    // surface areas, so the totals and verdict must update — but never
+    // rebuild these inputs themselves, or focus dies mid-keystroke. Same
+    // trap the settings inputs avoid, same fix.
+    renderSnowTotals();
+    renderSnowStorage();
+  });
+
+  function renderSnowTotals() {
+    const s = clearedBySurface();
     const ft = v => Math.round(v).toLocaleString();
     const rows = [
       ['Plow', s.plow],
@@ -2769,8 +2821,6 @@
     if (noWidth.length) rows.push(`<div class="empty-state">${noWidth.length} run${noWidth.length !== 1 ? 's have' : ' has'} no width set — linear feet only, no area</div>`);
 
     snowTotalsEl.innerHTML = rows.length ? rows.join('') : `<div class="empty-state">Measure a zone and set its surface</div>`;
-    renderSnowStorage();
-    renderSnowSettings();
   }
 
   // A removal clause changes what the storage number means, so the panel leads
@@ -2841,8 +2891,12 @@
     else if (SNOW_JOB_FIELDS.includes(key)) {
       state.snowJob[key] = e.target.value;
       saveState();
-      // Terms stick; event depth does not — depth is a scenario being tested,
-      // not a contract fact.
+      // Only the contract terms get written to the sticky store — they
+      // describe the contract, and one contract can span a dozen-plus
+      // properties. Event depth has no sticky key of its own because it's a
+      // scenario being tested, not a contract fact — though in practice it
+      // still rides along in state.snowJob across startNewJob()/openJob(),
+      // since neither resets a field the incoming job doesn't set.
       if (key === 'removalWindowHrs' || key === 'triggerDepthIn') saveSnowTerms();
     }
     else return;
@@ -3532,7 +3586,12 @@
     const measured = drawn.filter(z => z.mode === 'area' && !(isSnow() && surfaceOf(z) === 'storage'));
     const cuts = drawn.filter(isCut);
     const runs = drawn.filter(isLine);
-    if (!measured.length && !runs.length) { showToast('Nothing measured yet'); return; }
+    // Storage is a real, drawn zone — just not cleared ground. A site that is
+    // nothing but a pile location (no plow/walk/hand work, no runs) still has
+    // something worth exporting; it shouldn't abort as though nothing was
+    // measured.
+    const storageZones = isSnow() ? drawn.filter(z => z.mode === 'area' && surfaceOf(z) === 'storage') : [];
+    if (!measured.length && !runs.length && !storageZones.length) { showToast('Nothing measured yet'); return; }
     // Keyed off zones that actually have an area — a half-outlined second zone
     // shouldn't turn the card into a one-row "2 zones" breakdown.
     const multi = measured.length > 1;
@@ -3568,7 +3627,11 @@
     let H = headH + resultH + 40 + cardH + 60;
     if (zoneRows) H += 46 + zoneRows * 40 + 20;
     if (runRows) H += 46 + runRows * 40 + 20;
-    if (materialRows.length) H += 46 + materialRows.length * 42 + 60;
+    // The materials block never draws in snow (guarded below), so it must not
+    // reserve height either — otherwise a snow card on a job that still
+    // carries material layers gets dead whitespace where those rows would
+    // have been.
+    if (!isSnow() && materialRows.length) H += 46 + materialRows.length * 42 + 60;
     // Snow block height — mirrors the row-counting the sections above already
     // do, sized to the exact increments its drawing code below uses. Without
     // this the card's canvas height is fixed before the snow block ever
@@ -3607,14 +3670,20 @@
     g.globalAlpha = 1;
 
     // Headline is the net job area — everything measured, less everything cut
-    // out of it. This is the number someone orders against.
-    const totalSqft = measured.reduce((s, z) => s + zoneNetSqft(z), 0);
+    // out of it. This is the number someone orders against. In snow this
+    // must equal the surface rows the Snow block prints below (plow + walk +
+    // hand) — that's clearedSqft(), not a sum over `measured`, because
+    // `measured` is area-mode zones only and misses the square footage of a
+    // width-bearing walk run.
+    const totalSqft = isSnow() ? clearedSqft() : measured.reduce((s, z) => s + zoneNetSqft(z), 0);
     const totalSqm = totalSqft / 10.7639;
     // The band must bracket the number it is printed under. `measured` drops
     // snow storage from the headline, so the variance sum has to drop it too —
     // otherwise a noisy storage zone widens the range around an area it is not
     // part of. Cuts stay in: their uncertainty genuinely propagates into net
-    // area. Runs contribute nothing (areaSigmaSqm returns 0 below 3 pins).
+    // area. A straight 2-pin run contributes nothing (areaSigmaSqm returns 0
+    // below 3 pins), but a bent run with 3+ pins does — the same closed-
+    // polygon formula runs on it since this function doesn't check zone mode.
     const bandZones = drawn.filter(z => !(isSnow() && surfaceOf(z) === 'storage'));
     const bandSqft = 2 * Math.sqrt(
       bandZones.reduce((s, z) => { const v = areaSigmaSqm(z.pins); return s + v * v; }, 0)
@@ -3627,18 +3696,24 @@
     g.fillStyle = '#ffffff';
     g.font = `700 24px ${F}`;
     // A job of nothing but runs has no square footage to headline, so the
-    // total length takes the top slot instead.
-    const runOnly = !measured.length;
+    // total length takes the top slot instead. A snow site that is nothing
+    // but storage has no cleared area either — storage never counts as
+    // cleared — so it gets its own slot rather than reading as an empty run.
+    const runOnly = !measured.length && runs.length > 0;
+    const storageOnly = !measured.length && !runs.length && storageZones.length > 0;
     const headlineNum = runOnly
       ? Math.round(runs.reduce((s, z) => s + zoneLenFt(z), 0))
+      : storageOnly ? Math.round(clearedBySurface().storage)
       : Math.round(totalSqft);
     g.fillText(
       runOnly
         ? `TOTAL RUN · ${runs.length} LENGTH${runs.length !== 1 ? 'S' : ''}`
-        : cuts.length
-          ? `NET AREA · ${cuts.length} CUT-OUT${cuts.length !== 1 ? 'S' : ''} REMOVED`
-          : multi ? `${isSnow() ? 'CLEARED' : 'TOTAL'} AREA · ${measured.length} ZONES`
-                  : (isSnow() ? 'CLEARED AREA' : 'ESTIMATED AREA'),
+        : storageOnly
+          ? 'SNOW STORAGE'
+          : cuts.length
+            ? `NET AREA · ${cuts.length} CUT-OUT${cuts.length !== 1 ? 'S' : ''} REMOVED`
+            : multi ? `${isSnow() ? 'CLEARED' : 'TOTAL'} AREA · ${measured.length} ZONES`
+                    : (isSnow() ? 'CLEARED AREA' : 'ESTIMATED AREA'),
       W / 2, headH + 60);
     g.globalAlpha = 1;
 
@@ -3654,7 +3729,11 @@
 
     g.fillStyle = '#e8d9a8';
     g.font = `600 26px ${F}`;
-    if (!runOnly) {
+    // Storage's own position uncertainty isn't in bandSqft (bandZones drops
+    // storage the same way `measured` does), and totalSqft is 0 for a
+    // storage-only site, so there is no band to bracket the storage headline
+    // with — skip the range rather than print one around the wrong number.
+    if (!runOnly && !storageOnly) {
       g.fillText(
         `Range: ${Math.max(0, Math.round(totalSqft - bandSqft)).toLocaleString()} – ${Math.round(totalSqft + bandSqft).toLocaleString()} sq ft`,
         W / 2, headH + 275
@@ -3665,6 +3744,11 @@
     const extras = [];
     if (runOnly) {
       extras.push(`${(headlineNum / 3).toFixed(1)} yd`);
+    } else if (storageOnly) {
+      // totalSqm is 0 here (clearedSqft() excludes storage), so the acres/sq
+      // yd figures below would print against the wrong quantity — derive
+      // sq yd from the headline number itself instead.
+      extras.push(`${Math.round(headlineNum / 9).toLocaleString()} sq yd`);
     } else {
       if (acres >= 0.1) extras.push(`${acres.toFixed(2)} acres`);
       extras.push(`${Math.round(totalSqm * 1.19599).toLocaleString()} sq yd`);
@@ -4079,6 +4163,13 @@
     } catch (e) { return false; }
     if (!saved) return false;
 
+    // Season and its settings are app state, not tied to whether any zone
+    // was ever drawn. A season toggled with nothing on the map yet must
+    // still survive a reload, so this runs before the zones-length branch
+    // below can return early and skip it.
+    if (saved.season === 'snow') state.season = 'snow';
+    if (saved.snowJob) Object.assign(state.snowJob, saved.snowJob);
+
     if (saved.v === 2 && Array.isArray(saved.zones) && saved.zones.length) {
       state.zones = saved.zones;
       // Jobs saved before cut-outs existed have no mode; they were all areas.
@@ -4111,9 +4202,6 @@
     if (saved.theme) state.theme = saved.theme;
     if (saved.resultOpen) state.resultOpen = true;
     if (saved.crosshair) state.crosshair = true;
-    // Jobs saved before snow mode existed were all summer work.
-    if (saved.season === 'snow') state.season = 'snow';
-    if (saved.snowJob) Object.assign(state.snowJob, saved.snowJob);
     return true;
   }
 
@@ -4147,9 +4235,15 @@
   });
 
   const seasonBtn = document.getElementById('season-btn');
+  // The button's tint must always agree with state.season, not just right
+  // after a tap — a restored snow job or a season carried in by openJob()
+  // both change state.season without going through the click handler.
+  function syncSeasonBtn() {
+    seasonBtn.classList.toggle('active', isSnow());
+  }
   seasonBtn.addEventListener('click', () => {
     state.season = isSnow() ? 'summer' : 'snow';
-    seasonBtn.classList.toggle('active', isSnow());
+    syncSeasonBtn();
     renderAll();
     saveState();
     showToast(isSnow() ? 'Snow season' : 'Summer season');
@@ -4445,6 +4539,7 @@
     // rather than yanking a crew out of the season they are working in.
     if (job.season) state.season = job.season;
     if (job.snowJob) Object.assign(state.snowJob, job.snowJob);
+    syncSeasonBtn();
     state.nextZoneId = job.nextZoneId || state.zones.length + 1;
     state.nextPinId = job.nextPinId ||
       state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
@@ -4554,6 +4649,7 @@
     state.jobStarted = state.jobStarted || Date.now();
   }
   applyTheme();
+  syncSeasonBtn();
   resultArea.setAttribute('aria-expanded', String(!!state.resultOpen));
   setCrosshair(!!state.crosshair);
   syncBarHeights();
