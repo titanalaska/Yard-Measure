@@ -3610,8 +3610,14 @@
     // out of it. This is the number someone orders against.
     const totalSqft = measured.reduce((s, z) => s + zoneNetSqft(z), 0);
     const totalSqm = totalSqft / 10.7639;
+    // The band must bracket the number it is printed under. `measured` drops
+    // snow storage from the headline, so the variance sum has to drop it too —
+    // otherwise a noisy storage zone widens the range around an area it is not
+    // part of. Cuts stay in: their uncertainty genuinely propagates into net
+    // area. Runs contribute nothing (areaSigmaSqm returns 0 below 3 pins).
+    const bandZones = drawn.filter(z => !(isSnow() && surfaceOf(z) === 'storage'));
     const bandSqft = 2 * Math.sqrt(
-      drawn.reduce((s, z) => { const v = areaSigmaSqm(z.pins); return s + v * v; }, 0)
+      bandZones.reduce((s, z) => { const v = areaSigmaSqm(z.pins); return s + v * v; }, 0)
     ) * 10.7639;
 
     g.fillStyle = '#2d6a2d';
