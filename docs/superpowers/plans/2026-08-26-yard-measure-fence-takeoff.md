@@ -221,30 +221,44 @@ Call `loadFencePrefs()` at startup immediately after the existing `loadSnowPrefs
 
 Run in `javascript_tool`:
 
+Three phases, each needing a reload — asserting a value immediately after
+assigning it proves nothing, so the reload is the check.
+
+**Phase 1** — clear the store, then reload:
+
+```js
+localStorage.removeItem('yardMeasureFencePrefs');
+'cleared — now RELOAD, then run phase 2'
+```
+
+**Phase 2** — after reloading, confirm it genuinely ships blank, then enter a
+value and reload again:
+
 ```js
 (() => {
-  localStorage.removeItem('yardMeasureFencePrefs');
-  state.fencePrefs.spacingFt = '';
-  if (state.fencePrefs.spacingFt !== '') throw new Error('should start blank');
+  if (state.fencePrefs.spacingFt !== '' || state.fencePrefs.bagsPerPost !== '')
+    throw new Error('with no stored prefs both fields must load blank, got ' + JSON.stringify(state.fencePrefs));
   state.fencePrefs.spacingFt = '8';
   saveFencePrefs();
-  return 'PASS — 8 stored; now reload and run the second check';
+  return 'PASS — blank on a clean load; 8 stored. RELOAD, then run phase 3';
 })()
 ```
 
-Reload, then:
+**Phase 3** — after the second reload:
 
 ```js
 (() => {
   if (state.fencePrefs.spacingFt !== '8')
     throw new Error('spacing not remembered across reload, got ' + JSON.stringify(state.fencePrefs.spacingFt));
   if (state.fencePrefs.bagsPerPost !== '')
-    throw new Error('bagsPerPost should still be blank — nothing entered it');
+    throw new Error('bagsPerPost must still be blank — nothing ever entered it');
   return 'PASS';
 })()
 ```
 
-Expected: `"PASS"` for both. The second assertion is the point: retention must not invent the value nobody typed.
+Phase 2's first assertion proves the field really ships empty rather than being
+emptied by the check itself. Phase 3's second assertion is the other half:
+retention must remember what was typed **and** must not invent what was not.
 
 - [ ] **Step 4: Commit**
 
@@ -397,7 +411,8 @@ git commit -m "Derive fence posts and sections from the walked corner geometry"
 ### Task 4: Gates
 
 **Files:**
-- Modify: `index.html` — `FENCE` section, and the panel from Task 5 once it exists
+- Modify: `index.html` — the `FENCE` section only. The panel that calls these
+  mutators is Task 5's job; do not build UI here.
 
 **Interfaces:**
 - Consumes: `isFence(z)`, `saveState()`
@@ -786,10 +801,18 @@ In `exportSnapshot()`, after the existing materials block and gated the same way
   if (/\$/.test(t)) throw new Error('a dollar sign reached the export');
 
   // An ordinary summer job with no fence must be byte-identical to before.
-  fenceRuns().forEach(z => { z.fence = false; });
-  const plain = jobSummaryText();
-  if (/FENCE/.test(plain)) throw new Error('fence section leaked into a job with no fence runs');
-  fenceRuns();
+  // Capture and RESTORE — an earlier draft of this check turned every fence
+  // flag off and never put them back, quietly undoing the user's markings.
+  const marked = state.zones.filter(z => z.fence);
+  try {
+    marked.forEach(z => { z.fence = false; });
+    if (/FENCE/.test(jobSummaryText()))
+      throw new Error('fence section leaked into a job with no fence runs');
+  } finally {
+    marked.forEach(z => { z.fence = true; });
+  }
+  if (!state.zones.filter(z => z.fence).length !== !marked.length)
+    throw new Error('fence flags were not restored');
   return 'PASS';
 })()
 ```
