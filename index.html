@@ -1750,6 +1750,9 @@
       nextLayerId: 1,
       surface: 'plow',
       widthFt: '',
+      fence: false,
+      gates: [],
+      nextGateId: 1,
     };
     state.zones.push(z);
     return z;
@@ -1789,6 +1792,12 @@
   // A run needs two ends; a shape needs three corners.
   const minPins = z => (isLine(z) ? 2 : 3);
   const isDrawn = z => z.pins.length >= minPins(z);
+
+  // Fence is summer work. A run in snow is a sidewalk carrying a width so it
+  // yields area to clear; a run in summer can be a fence carrying posts and
+  // gates. Same geometry, different question — and the phone has no room to
+  // show both.
+  const isFence = z => !isSnow() && isLine(z) && isDrawn(z) && !!z.fence;
 
   // Open path length — a run does not close back on itself the way a
   // perimeter does.
@@ -1875,6 +1884,9 @@
         ? (isSnow() && !isCut(z)
             ? `<button class="chip-act" data-act="surface" title="Change surface">${SURFACE_LABEL[surfaceOf(z)]}</button>`
             : '') +
+          (!isSnow() && isLine(z)
+            ? `<button class="chip-act" data-act="fence" title="Mark this run as fence">${z.fence ? 'Fence' : 'Run'}</button>`
+            : '') +
           `<button class="chip-act" data-act="mode" title="Switch between area, cut-out and run">${icon(MODE_ICON[z.mode] || MODE_ICON.area, 'ic-sm')}</button>` +
           `<button class="chip-act" data-act="rename" title="Rename">${icon('edit','ic-sm')}</button>` +
           (n > 1 ? `<button class="chip-act" data-act="delete" title="Delete zone">${icon('x','ic-sm')}</button>` : '')
@@ -1909,6 +1921,15 @@
     const zone = state.zones.find(z => z.id === Number(chip.dataset.zone));
     if (!zone) return;
 
+    if (act === 'fence') {
+      zone.fence = !zone.fence;
+      renderAll();
+      saveState();
+      showToast(zone.fence
+        ? `"${zone.name}" is a fence line — posts and gates`
+        : `"${zone.name}" is a plain run — measured by the foot`);
+      return;
+    }
     if (act === 'surface') {
       const list = surfacesFor(zone);
       const i = list.indexOf(surfaceOf(zone));
@@ -4178,6 +4199,13 @@
       // and plow is the harmless default since nothing reads it until the
       // season is switched.
       state.zones.forEach(z => { if (!z.surface) z.surface = 'plow'; });
+      // Jobs saved before fence takeoff carry no fence flag or gate list —
+      // blank first, then remembered.
+      state.zones.forEach(z => {
+        if (typeof z.fence !== 'boolean') z.fence = false;
+        if (!Array.isArray(z.gates)) z.gates = [];
+        if (!z.nextGateId) z.nextGateId = 1;
+      });
       state.activeZoneId = saved.activeZoneId;
       state.nextZoneId = saved.nextZoneId || state.zones.length + 1;
       state.nextPinId = saved.nextPinId ||
@@ -4534,6 +4562,12 @@
       // harmless today — but materialising it here keeps the two load paths
       // (loadState and openJob) telling the same story about a zone.
       if (!z.surface) z.surface = 'plow';
+      // Same story for fence: keep this path in step with loadState() so a
+      // zone loaded from a saved job behaves identically to one restored
+      // from localStorage.
+      if (typeof z.fence !== 'boolean') z.fence = false;
+      if (!Array.isArray(z.gates)) z.gates = [];
+      if (!z.nextGateId) z.nextGateId = 1;
     });
     // A job saved before snow mode has no season; leave the app where it is
     // rather than yanking a crew out of the season they are working in.
