@@ -1817,8 +1817,16 @@
     return Math.max(0, zoneSqft(z) - cut);
   }
 
+  // In summer every area zone is ground being worked, so the plain sum is the
+  // job. Snow introduces the first surface that is measured but never cleared:
+  // a storage zone is where snow gets pushed TO. Adding it to cleared ground
+  // overstates the work, and this number headlines the card someone prices
+  // from — so in snow it counts cleared surfaces only. Storage is still
+  // reported, on its own row, by the Snow panel and both exports.
   function jobSqft() {
-    return state.zones.reduce((s, z) => s + zoneNetSqft(z), 0);
+    return state.zones
+      .filter(z => !(isSnow() && surfaceOf(z) === 'storage'))
+      .reduce((s, z) => s + zoneNetSqft(z), 0);
   }
 
   // A cut that overlaps no measured area removes nothing, and is nearly always
@@ -2415,11 +2423,12 @@
     }
 
     if (multi) {
-      const areas = state.zones.filter(x => x.mode === 'area' && isDrawn(x)).length;
+      const areas = state.zones.filter(x =>
+        x.mode === 'area' && isDrawn(x) && !(isSnow() && surfaceOf(x) === 'storage')).length;
       const nCuts = state.zones.filter(x => isCut(x) && isDrawn(x)).length;
       const nRuns = state.zones.filter(x => isLine(x) && isDrawn(x)).length;
       const bits = [];
-      if (areas) bits.push(`<b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> across ${areas} area${areas !== 1 ? 's' : ''}`
+      if (areas) bits.push(`<b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> ${isSnow() ? 'cleared across' : 'across'} ${areas} area${areas !== 1 ? 's' : ''}`
         + (nCuts ? `, ${nCuts} cut-out${nCuts !== 1 ? 's' : ''} removed` : ''));
       if (nRuns) bits.push(`<b>${Math.round(jobLinearFt()).toLocaleString()} ft</b> of run across ${nRuns}`);
       resultTotal.style.display = bits.length ? 'block' : 'none';
@@ -2729,6 +2738,11 @@
     if (!(sqft > 0) || !(rate > 0)) return null;
     return (sqft / 1000) * rate / 2000;
   }
+
+  // A depth is a field measurement, not a computed value — one decimal is more
+  // precision than anyone reads off a snow stake, and a raw float on a priced
+  // document looks like a defect.
+  const fmtIn = v => (Math.round(v * 10) / 10).toString();
 
   function renderSnow() {
     if (!isSnow()) { snowSection.style.display = 'none'; return; }
@@ -3512,7 +3526,10 @@
 
   async function exportSnapshot() {
     const drawn = state.zones.filter(isDrawn);
-    const measured = drawn.filter(z => z.mode === 'area');
+    // Storage is measured but not cleared — see jobSqft(). Excluding it here
+    // keeps the headline, the per-zone rows and the range consistent; the Snow
+    // block below still reports storage on its own row.
+    const measured = drawn.filter(z => z.mode === 'area' && !(isSnow() && surfaceOf(z) === 'storage'));
     const cuts = drawn.filter(isCut);
     const runs = drawn.filter(isLine);
     if (!measured.length && !runs.length) { showToast('Nothing measured yet'); return; }
@@ -3614,7 +3631,8 @@
         ? `TOTAL RUN · ${runs.length} LENGTH${runs.length !== 1 ? 'S' : ''}`
         : cuts.length
           ? `NET AREA · ${cuts.length} CUT-OUT${cuts.length !== 1 ? 'S' : ''} REMOVED`
-          : multi ? `TOTAL AREA · ${measured.length} ZONES` : 'ESTIMATED AREA',
+          : multi ? `${isSnow() ? 'CLEARED' : 'TOTAL'} AREA · ${measured.length} ZONES`
+                  : (isSnow() ? 'CLEARED AREA' : 'ESTIMATED AREA'),
       W / 2, headH + 60);
     g.globalAlpha = 1;
 
@@ -3905,8 +3923,8 @@
       const trig = parseFloat(state.snowJob.triggerDepthIn);
       const depth = parseFloat(state.snowJob.eventDepthIn);
       const notes = [];
-      if (trig > 0) notes.push(`${trig}" callout trigger`);
-      if (depth > 0) notes.push(`quantities at a ${depth}" event`);
+      if (trig > 0) notes.push(`${fmtIn(trig)}" callout trigger`);
+      if (depth > 0) notes.push(`quantities at a ${fmtIn(depth)}" event`);
       if (notes.length) {
         g.fillStyle = '#555';
         g.font = `400 24px ${F}`;
@@ -4287,10 +4305,10 @@
     // Contract terms travel with the measurement — a 1-inch trigger is exactly
     // the sort of thing that gets lost between the walk and the estimate.
     const trig = parseFloat(state.snowJob.triggerDepthIn);
-    if (trig > 0) lines.push(`TRIGGER: ${trig}" callout`);
+    if (trig > 0) lines.push(`TRIGGER: ${fmtIn(trig)}" callout`);
 
     const depth = parseFloat(state.snowJob.eventDepthIn);
-    if (depth > 0) lines.push(`(quantities at a ${depth}" event)`);
+    if (depth > 0) lines.push(`(quantities at a ${fmtIn(depth)}" event)`);
     return lines.join('\n');
   }
 
