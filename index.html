@@ -274,6 +274,10 @@
 
   .hdr-btn:active { transform: scale(0.94); background: rgba(255,255,255,0.3); }
   #theme-btn { padding: 0 var(--s2); }
+  #season-btn { padding: 0 var(--s2); }
+  /* Snow season is a standing mode, not a momentary press — the tint has to
+     persist after the finger lifts, unlike the shared :active flash above. */
+  .hdr-btn.active { background: rgba(255,255,255,0.32); border-color: rgba(255,255,255,0.75); }
 
   /* JOBS SHEET */
   #jobs-overlay {
@@ -795,6 +799,12 @@
 
   /* LAYERS */
   #layers-section {
+    padding: 16px 16px 0;
+  }
+
+  /* Snow replaces the layers panel outright when the season is snow, so it
+     needs the same edge padding or it sits flush against the screen edge. */
+  #snow-section {
     padding: 16px 16px 0;
   }
 
@@ -1421,6 +1431,7 @@
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
   <symbol id="i-collapse" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></symbol>
   <symbol id="i-fit" viewBox="0 0 24 24"><path d="M3 8V5a2 2 0 0 1 2-2h3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/><rect x="8" y="8" width="8" height="8" rx="1"/></symbol>
+  <symbol id="i-snow" viewBox="0 0 24 24"><path d="M12 2v20M4.9 6.5l14.2 11M19.1 6.5L4.9 17.5"/><path d="M12 6l-2.5-2.5M12 6l2.5-2.5M12 18l-2.5 2.5M12 18l2.5 2.5"/></symbol>
 </defs></svg>
 
 <header>
@@ -1428,6 +1439,9 @@
   <h1>Yard Measure</h1>
   <button id="theme-btn" class="hdr-btn" type="button" title="Display mode">
     <svg class="ic"><use href="#i-auto" id="theme-icon"/></svg>
+  </button>
+  <button id="season-btn" class="hdr-btn" type="button" title="Summer / snow season">
+    <svg class="ic"><use href="#i-snow"/></svg>
   </button>
   <button id="jobs-btn" class="hdr-btn" type="button" title="Saved jobs">
     <svg class="ic"><use href="#i-jobs"/></svg><span>Jobs</span>
@@ -1575,6 +1589,17 @@
   <div id="layers-total" class="layers-total" style="display:none;"></div>
 </div>
 
+<div id="snow-section" style="display:none;">
+  <div class="section-header">
+    <span class="section-title">Snow</span>
+    <span class="pin-count" id="snow-count">0 zones</span>
+  </div>
+  <div id="snow-widths"></div>
+  <div id="snow-totals"></div>
+  <div id="snow-storage" class="layers-total"></div>
+  <div id="snow-settings"></div>
+</div>
+
 <div id="snapshot-section">
   <input type="text" id="job-label" placeholder="Job name or address (optional)" maxlength="60">
 </div>
@@ -1634,6 +1659,27 @@
     resultOpen: false,
     crosshair: false,
     mapFull: false,
+    // Snow is a different season's job on the same ground. The flag changes
+    // only what is offered and what is reported — never how anything is
+    // measured, so a summer user who never touches it sees today's app.
+    season: 'summer',
+    // Fleet and operating practice — these describe how Titan works, not a
+    // site, so they outlive any one job. Everything here except the pile
+    // height is a judgment call and ships empty on purpose: a number invented
+    // in code reads as fact six months later.
+    snowPrefs: {
+      pileHeightFt: 20,          // Titan's own working figure for a finished pile
+      packingFactor: '',
+      compactionRatio: '',
+      truckCapacityYd3: '',
+      sandRateLbsPer1000: '',
+    },
+    // The site and its contract.
+    snowJob: {
+      eventDepthIn: '',
+      removalWindowHrs: '',
+      triggerDepthIn: '',
+    },
   };
 
   const icon = (id, cls) => `<svg class="ic ${cls || ''}"><use href="#i-${id}"/></svg>`;
@@ -1674,6 +1720,12 @@
   const layersCountEl = document.getElementById('layers-count');
   const layersTotalEl = document.getElementById('layers-total');
   const addLayerBtn = document.getElementById('add-layer-btn');
+  const snowSection = document.getElementById('snow-section');
+  const snowWidthsEl = document.getElementById('snow-widths');
+  const snowTotalsEl = document.getElementById('snow-totals');
+  const snowStorageEl = document.getElementById('snow-storage');
+  const snowSettingsEl = document.getElementById('snow-settings');
+  const snowCountEl = document.getElementById('snow-count');
   const tapModeBtn = document.getElementById('tap-mode-btn');
   const mapHint = document.getElementById('map-hint');
   const mapEl = document.getElementById('yard-map');
@@ -1696,6 +1748,8 @@
       pins: [],
       layers: [],
       nextLayerId: 1,
+      surface: 'plow',
+      widthFt: '',
     };
     state.zones.push(z);
     return z;
@@ -1717,6 +1771,21 @@
   const MODES = ['area', 'cut', 'line'];
   const MODE_ICON = { area: 'area', cut: 'cut', line: 'run' };
   const MODE_NOUN = { area: 'measured area', cut: 'cut-out', line: 'linear run' };
+  const isSnow = () => state.season === 'snow';
+  // Surface is orthogonal to mode. Mode is geometry — is this a shape, a hole,
+  // or a run. Surface is who clears it and how, which is what separates a lot
+  // from a sidewalk from the stairs by the door when someone prices the job.
+  const SURFACES = ['plow', 'walk', 'hand', 'storage'];
+  const SURFACE_LABEL = { plow: 'Plow', walk: 'Walk', hand: 'Hand', storage: 'Storage' };
+  const SURFACE_NOUN = {
+    plow: 'machine-cleared',
+    walk: 'shovel or blower',
+    hand: 'hand-cleared — stairs and anywhere a machine cannot reach',
+    storage: 'snow storage — filled, not cleared',
+  };
+  const surfaceOf = z => z.surface || 'plow';
+  // Storage along a line is meaningless: you do not stack snow down a stripe.
+  const surfacesFor = z => (isLine(z) ? ['plow', 'walk', 'hand'] : SURFACES);
   // A run needs two ends; a shape needs three corners.
   const minPins = z => (isLine(z) ? 2 : 3);
   const isDrawn = z => z.pins.length >= minPins(z);
@@ -1756,8 +1825,16 @@
     return Math.max(0, zoneSqft(z) - cut);
   }
 
+  // In summer every area zone is ground being worked, so the plain sum is the
+  // job. Snow introduces the first surface that is measured but never cleared:
+  // a storage zone is where snow gets pushed TO. Adding it to cleared ground
+  // overstates the work, and this number headlines the card someone prices
+  // from — so in snow it counts cleared surfaces only. Storage is still
+  // reported, on its own row, by the Snow panel and both exports.
   function jobSqft() {
-    return state.zones.reduce((s, z) => s + zoneNetSqft(z), 0);
+    return state.zones
+      .filter(z => !(isSnow() && surfaceOf(z) === 'storage'))
+      .reduce((s, z) => s + zoneNetSqft(z), 0);
   }
 
   // A cut that overlaps no measured area removes nothing, and is nearly always
@@ -1795,7 +1872,10 @@
       else if (line) label = `${Math.round(zoneLenFt(z)).toLocaleString()} ft`;
       else label = `${cut ? '−' : ''}${Math.round(cut ? zoneSqft(z) : zoneNetSqft(z)).toLocaleString()} ft²`;
       const acts = active
-        ? `<button class="chip-act" data-act="mode" title="Switch between area, cut-out and run">${icon(MODE_ICON[z.mode] || MODE_ICON.area, 'ic-sm')}</button>` +
+        ? (isSnow() && !isCut(z)
+            ? `<button class="chip-act" data-act="surface" title="Change surface">${SURFACE_LABEL[surfaceOf(z)]}</button>`
+            : '') +
+          `<button class="chip-act" data-act="mode" title="Switch between area, cut-out and run">${icon(MODE_ICON[z.mode] || MODE_ICON.area, 'ic-sm')}</button>` +
           `<button class="chip-act" data-act="rename" title="Rename">${icon('edit','ic-sm')}</button>` +
           (n > 1 ? `<button class="chip-act" data-act="delete" title="Delete zone">${icon('x','ic-sm')}</button>` : '')
         : '';
@@ -1829,9 +1909,22 @@
     const zone = state.zones.find(z => z.id === Number(chip.dataset.zone));
     if (!zone) return;
 
+    if (act === 'surface') {
+      const list = surfacesFor(zone);
+      const i = list.indexOf(surfaceOf(zone));
+      zone.surface = list[(i + 1) % list.length];
+      renderAll();
+      saveState();
+      showToast(`"${zone.name}" is ${SURFACE_NOUN[zone.surface]}`);
+      return;
+    }
     if (act === 'mode') {
       const was = zone.mode;
       zone.mode = MODES[(MODES.indexOf(zone.mode) + 1) % MODES.length];
+      // A run cannot be storage, so a shape sitting on storage that becomes a
+      // run has to land somewhere valid rather than silently keeping a surface
+      // nothing will ever count.
+      if (!surfacesFor(zone).includes(surfaceOf(zone))) zone.surface = 'plow';
       // A cut-out is a hole in the ground, not ground of its own — it can't
       // carry its own material order. Switching between area and run changes
       // what a layer even means (volume vs. length), so those clear too.
@@ -2338,11 +2431,18 @@
     }
 
     if (multi) {
-      const areas = state.zones.filter(x => x.mode === 'area' && isDrawn(x)).length;
+      const areas = state.zones.filter(x =>
+        x.mode === 'area' && isDrawn(x) && !(isSnow() && surfaceOf(x) === 'storage')).length;
       const nCuts = state.zones.filter(x => isCut(x) && isDrawn(x)).length;
       const nRuns = state.zones.filter(x => isLine(x) && isDrawn(x)).length;
       const bits = [];
-      if (areas) bits.push(`<b>${Math.round(jobSqft()).toLocaleString()} sq ft</b> across ${areas} area${areas !== 1 ? 's' : ''}`
+      // In snow this headline must equal the surface rows in the Snow panel
+      // below it (plow + walk + hand) — that's clearedSqft(), not jobSqft().
+      // jobSqft() sums only area-mode zones, so it silently drops the square
+      // footage of a width-bearing walk run, which is otherwise a real part
+      // of what got cleared.
+      const areaTotal = isSnow() ? clearedSqft() : jobSqft();
+      if (areas) bits.push(`<b>${Math.round(areaTotal).toLocaleString()} sq ft</b> ${isSnow() ? 'cleared across' : 'across'} ${areas} area${areas !== 1 ? 's' : ''}`
         + (nCuts ? `, ${nCuts} cut-out${nCuts !== 1 ? 's' : ''} removed` : ''));
       if (nRuns) bits.push(`<b>${Math.round(jobLinearFt()).toLocaleString()} ft</b> of run across ${nRuns}`);
       resultTotal.style.display = bits.length ? 'block' : 'none';
@@ -2501,6 +2601,11 @@
   }
 
   function renderLayers() {
+    // Snow replaces materials outright rather than stacking below it: the
+    // panel below the map is scarce space on a phone. This also overrides
+    // whatever renderResult() set layersSection.display to just above in
+    // renderAll() — renderLayers() runs after it and has the final say.
+    if (isSnow()) { layersSection.style.display = 'none'; return; }
     const z = activeZone();
     const line = isLine(z);
     const layers = z.layers;
@@ -2575,6 +2680,232 @@
     }
     layersTotalEl.innerHTML = html;
   }
+
+  // ── SNOW ─────────────────────────────────────────────
+  // A sidewalk is a run: two pins beats outlining four corners in the dark in
+  // February. Snow volume needs area, so a run carries a width and multiplies
+  // out. A run with no width still reports its linear feet — it contributes no
+  // area, and the panel says so rather than counting it as zero.
+  function zoneSnowSqft(z) {
+    if (isCut(z)) return 0;
+    if (isLine(z)) {
+      const w = parseFloat(z.widthFt);
+      return w > 0 ? zoneLenFt(z) * w : 0;
+    }
+    return zoneNetSqft(z);
+  }
+
+  function clearedBySurface() {
+    const out = { plow: 0, walk: 0, hand: 0, storage: 0 };
+    state.zones.filter(isDrawn).forEach(z => {
+      if (isCut(z)) return;   // a hole subtracts through its parent, not here
+      out[surfaceOf(z)] += zoneSnowSqft(z);
+    });
+    return out;
+  }
+
+  // Storage is deliberately excluded. A pile usually sits on ground that is
+  // also plowed — the same ground doing two jobs — so it neither adds to nor
+  // subtracts from what gets cleared.
+  function clearedSqft() {
+    const s = clearedBySurface();
+    return s.plow + s.walk + s.hand;
+  }
+
+  function snowLinearFt() {
+    return state.zones
+      .filter(z => isDrawn(z) && isLine(z) && surfaceOf(z) !== 'storage')
+      .reduce((s, z) => s + zoneLenFt(z), 0);
+  }
+
+  // A push-stacked pile is a ramped wedge sitting at its angle of repose, not
+  // a box filled to a uniform height — packingFactor is that discount.
+  function storageCapacityYd3() {
+    const sqft = clearedBySurface().storage;
+    const h = parseFloat(state.snowPrefs.pileHeightFt);
+    const f = parseFloat(state.snowPrefs.packingFactor);
+    if (!(sqft > 0) || !(h > 0) || !(f > 0)) return null;
+    return (sqft * h * f) / 27;
+  }
+
+  // compactionRatio is FRESH ÷ PILED. A ratio of 3 means three cubic feet of
+  // fresh snow becomes one once plowed and piled. The inverse reading is
+  // equally natural and wrong by a factor of nine, which is why the input
+  // label spells the direction out.
+  function snowVolumeYd3() {
+    const sqft = clearedSqft();
+    const depth = parseFloat(state.snowJob.eventDepthIn);
+    const ratio = parseFloat(state.snowPrefs.compactionRatio);
+    if (!(sqft > 0) || !(depth > 0) || !(ratio > 0)) return null;
+    return (sqft * (depth / 12)) / 27 / ratio;
+  }
+
+  function haulLoads(yd3) {
+    const cap = parseFloat(state.snowPrefs.truckCapacityYd3);
+    if (!(yd3 > 0) || !(cap > 0)) return null;
+    return Math.ceil(yd3 / cap);
+  }
+
+  function iceControlTons() {
+    const sqft = clearedSqft();
+    const rate = parseFloat(state.snowPrefs.sandRateLbsPer1000);
+    if (!(sqft > 0) || !(rate > 0)) return null;
+    return (sqft / 1000) * rate / 2000;
+  }
+
+  // A depth is a field measurement, not a computed value — one decimal is more
+  // precision than anyone reads off a snow stake, and a raw float on a priced
+  // document looks like a defect.
+  const fmtIn = v => (Math.round(v * 10) / 10).toString();
+
+  function renderSnow() {
+    if (!isSnow()) { snowSection.style.display = 'none'; return; }
+    snowSection.style.display = 'block';
+    const n = state.zones.filter(isDrawn).length;
+    snowCountEl.textContent = `${n} zone${n !== 1 ? 's' : ''}`;
+
+    renderSnowWidths();
+    renderSnowTotals();
+    renderSnowStorage();
+    renderSnowSettings();
+  }
+
+  // A run is two pins and a typed width — outlining a 400-foot sidewalk in
+  // the dark in February isn't the field-speed win outlining a lot is. One
+  // row per line zone, labelled by name since a site can carry several runs.
+  function renderSnowWidths() {
+    const lines = state.zones.filter(z => isDrawn(z) && isLine(z));
+    if (!lines.length) { snowWidthsEl.innerHTML = ''; return; }
+    snowWidthsEl.innerHTML = lines.map(z => `
+      <div class="layer-item">
+        <div class="layer-row1">
+          <span>${escapeHtml(z.name)} <em>(${Math.round(zoneLenFt(z)).toLocaleString()} linear ft)</em></span>
+          <input type="number" class="snow-width-input" data-zone-id="${z.id}"
+                 value="${escapeAttr(z.widthFt ?? '')}" placeholder="width ft"
+                 min="0" step="0.5" inputmode="decimal">
+        </div>
+      </div>`).join('');
+  }
+
+  snowWidthsEl.addEventListener('input', (e) => {
+    if (!e.target.classList.contains('snow-width-input')) return;
+    const zone = state.zones.find(z => z.id === Number(e.target.dataset.zoneId));
+    if (!zone) return;
+    zone.widthFt = e.target.value;
+    saveState();
+    // Unlike the settings fields below, a width genuinely changes the
+    // surface areas, so the totals and verdict must update — but never
+    // rebuild these inputs themselves, or focus dies mid-keystroke. Same
+    // trap the settings inputs avoid, same fix.
+    renderSnowTotals();
+    renderSnowStorage();
+  });
+
+  function renderSnowTotals() {
+    const s = clearedBySurface();
+    const ft = v => Math.round(v).toLocaleString();
+    const rows = [
+      ['Plow', s.plow],
+      ['Walk', s.walk],
+      ['Hand', s.hand],
+      ['Storage', s.storage],
+    ].filter(([, v]) => v > 0)
+     .map(([label, v]) => `<div class="layer-row1"><span>${label}</span><strong>${ft(v)} ft²</strong></div>`);
+
+    const runFt = snowLinearFt();
+    if (runFt > 0) rows.push(`<div class="layer-row1"><span>Runs</span><strong>${ft(runFt)} linear ft</strong></div>`);
+
+    // A run with no width is measured but cannot contribute area. Say so
+    // rather than letting it read as zero square feet of sidewalk.
+    const noWidth = state.zones.filter(z => isDrawn(z) && isLine(z) && !(parseFloat(z.widthFt) > 0));
+    if (noWidth.length) rows.push(`<div class="empty-state">${noWidth.length} run${noWidth.length !== 1 ? 's have' : ' has'} no width set — linear feet only, no area</div>`);
+
+    snowTotalsEl.innerHTML = rows.length ? rows.join('') : `<div class="empty-state">Measure a zone and set its surface</div>`;
+  }
+
+  // A removal clause changes what the storage number means, so the panel leads
+  // with a different figure. Same arithmetic either way — under a 48-hour
+  // clause "it fits" is not a reprieve, because the snow leaves regardless.
+  function renderSnowStorage() {
+    const vol = snowVolumeYd3();
+    const cap = storageCapacityYd3();
+    const yd = v => v.toFixed(1);
+
+    if (vol == null) {
+      snowStorageEl.innerHTML = `<div class="empty-state">Set an event depth and a compaction ratio for a volume</div>`;
+      return;
+    }
+
+    const removal = parseFloat(state.snowJob.removalWindowHrs);
+    const loads = haulLoads(vol);
+    const tons = iceControlTons();
+    let html;
+
+    if (removal > 0) {
+      html = `<strong>${yd(vol)} yd³ to remove</strong>`
+        + (loads != null ? ` · ${loads} load${loads !== 1 ? 's' : ''}` : '')
+        + `<br><span style="font-weight:400;">Contract removal within ${removal} hr — it leaves whether or not it fits</span>`
+        + (cap != null ? `<br><span style="font-weight:400;">Can stage ${yd(cap)} yd³ on site while working through it</span>` : '');
+    } else if (cap == null) {
+      html = `<strong>${yd(vol)} yd³ of snow</strong><br><span style="font-weight:400;">Measure a storage zone and set a packing factor to check whether it fits</span>`;
+    } else if (vol <= cap) {
+      html = `<strong>Fits</strong> — ${yd(vol)} yd³ into ${yd(cap)} yd³ of storage`;
+    } else {
+      const over = vol - cap;
+      const overLoads = haulLoads(over);
+      html = `<strong>Over by ${yd(over)} yd³</strong>`
+        + (overLoads != null ? ` · ${overLoads} load${overLoads !== 1 ? 's' : ''}` : '')
+        + `<br><span style="font-weight:400;">${yd(vol)} yd³ of snow, ${yd(cap)} yd³ of storage</span>`;
+    }
+
+    if (tons != null) html += `<br><span style="font-weight:400;">Ice control: ${tons.toFixed(2)} tons per application</span>`;
+    snowStorageEl.innerHTML = html;
+  }
+
+  function renderSnowSettings() {
+    const p = state.snowPrefs, j = state.snowJob;
+    const num = (cls, val, ph, step) =>
+      `<input type="number" class="${cls}" value="${escapeAttr(val ?? '')}" placeholder="${escapeAttr(ph)}" min="0" step="${step}" inputmode="decimal">`;
+
+    snowSettingsEl.innerHTML = `
+      <div class="layer-item">
+        <div class="layer-row1"><span>Event depth</span>${num('snow-eventDepthIn', j.eventDepthIn, 'in', '0.5')}</div>
+        <div class="layer-row1"><span>Pile height (finished, ft)</span>${num('snow-pileHeightFt', p.pileHeightFt, 'ft', '1')}</div>
+        <div class="layer-row1"><span>Packing factor <em>(a pile is a wedge, not a box)</em></span>${num('snow-packingFactor', p.packingFactor, 'e.g. 0.5', '0.05')}</div>
+        <div class="layer-row1"><span>Compaction <em>(fresh ÷ piled — 3 means 3 ft³ fresh becomes 1 ft³ piled)</em></span>${num('snow-compactionRatio', p.compactionRatio, 'e.g. 3', '0.5')}</div>
+        <div class="layer-row1"><span>Truck capacity</span>${num('snow-truckCapacityYd3', p.truckCapacityYd3, 'yd³', '1')}</div>
+        <div class="layer-row1"><span>Ice control rate</span>${num('snow-sandRateLbsPer1000', p.sandRateLbsPer1000, 'lb per 1,000 ft²', '1')}</div>
+        <div class="layer-row1"><span>Removal window <em>(blank if the contract has none)</em></span>${num('snow-removalWindowHrs', j.removalWindowHrs, 'hr', '1')}</div>
+        <div class="layer-row1"><span>Callout trigger</span>${num('snow-triggerDepthIn', j.triggerDepthIn, 'in', '0.5')}</div>
+      </div>`;
+  }
+
+  const SNOW_PREF_FIELDS = ['pileHeightFt', 'packingFactor', 'compactionRatio', 'truckCapacityYd3', 'sandRateLbsPer1000'];
+  const SNOW_JOB_FIELDS = ['eventDepthIn', 'removalWindowHrs', 'triggerDepthIn'];
+
+  snowSettingsEl.addEventListener('input', (e) => {
+    const cls = [...e.target.classList].find(c => c.startsWith('snow-'));
+    if (!cls) return;
+    const key = cls.slice(5);
+    if (SNOW_PREF_FIELDS.includes(key)) { state.snowPrefs[key] = e.target.value; saveSnowPrefs(); }
+    else if (SNOW_JOB_FIELDS.includes(key)) {
+      state.snowJob[key] = e.target.value;
+      saveState();
+      // Only the contract terms get written to the sticky store — they
+      // describe the contract, and one contract can span a dozen-plus
+      // properties. Event depth has no sticky key of its own because it's a
+      // scenario being tested, not a contract fact — though in practice it
+      // still rides along in state.snowJob across startNewJob()/openJob(),
+      // since neither resets a field the incoming job doesn't set.
+      if (key === 'removalWindowHrs' || key === 'triggerDepthIn') saveSnowTerms();
+    }
+    else return;
+    // Re-render only the verdict, never the inputs — rebuilding the inputs
+    // would blow away focus mid-keystroke, the same trap the material layers
+    // already avoid. The surface totals come from pins, not from these fields,
+    // so they cannot have changed here.
+    renderSnowStorage();
+  });
 
   // ── LIVE MAP (MapLibre + Alaska imagery) ─────────────
   // Real aerial imagery under the walked perimeter, so odd/notched shapes can
@@ -3249,10 +3580,18 @@
 
   async function exportSnapshot() {
     const drawn = state.zones.filter(isDrawn);
-    const measured = drawn.filter(z => z.mode === 'area');
+    // Storage is measured but not cleared — see jobSqft(). Excluding it here
+    // keeps the headline, the per-zone rows and the range consistent; the Snow
+    // block below still reports storage on its own row.
+    const measured = drawn.filter(z => z.mode === 'area' && !(isSnow() && surfaceOf(z) === 'storage'));
     const cuts = drawn.filter(isCut);
     const runs = drawn.filter(isLine);
-    if (!measured.length && !runs.length) { showToast('Nothing measured yet'); return; }
+    // Storage is a real, drawn zone — just not cleared ground. A site that is
+    // nothing but a pile location (no plow/walk/hand work, no runs) still has
+    // something worth exporting; it shouldn't abort as though nothing was
+    // measured.
+    const storageZones = isSnow() ? drawn.filter(z => z.mode === 'area' && surfaceOf(z) === 'storage') : [];
+    if (!measured.length && !runs.length && !storageZones.length) { showToast('Nothing measured yet'); return; }
     // Keyed off zones that actually have an area — a half-outlined second zone
     // shouldn't turn the card into a one-row "2 zones" breakdown.
     const multi = measured.length > 1;
@@ -3288,7 +3627,25 @@
     let H = headH + resultH + 40 + cardH + 60;
     if (zoneRows) H += 46 + zoneRows * 40 + 20;
     if (runRows) H += 46 + runRows * 40 + 20;
-    if (materialRows.length) H += 46 + materialRows.length * 42 + 60;
+    // The materials block never draws in snow (guarded below), so it must not
+    // reserve height either — otherwise a snow card on a job that still
+    // carries material layers gets dead whitespace where those rows would
+    // have been.
+    if (!isSnow() && materialRows.length) H += 46 + materialRows.length * 42 + 60;
+    // Snow block height — mirrors the row-counting the sections above already
+    // do, sized to the exact increments its drawing code below uses. Without
+    // this the card's canvas height is fixed before the snow block ever
+    // draws, and everything past the bottom edge (the storage verdict, ice
+    // control, trigger note, even the footer) is silently cropped out of the
+    // exported PNG rather than erroring.
+    if (isSnow()) {
+      const snowSurfaceH = clearedBySurface();
+      const surfaceRowsH = SURFACES.filter(k => snowSurfaceH[k] > 0).length;
+      H += 40 + surfaceRowsH * 42;
+      if (snowVolumeYd3() != null) H += 44;
+      if (iceControlTons() != null) H += 42;
+      if (parseFloat(state.snowJob.triggerDepthIn) > 0 || parseFloat(state.snowJob.eventDepthIn) > 0) H += 40;
+    }
     H += 120; // footer
 
     const c = document.createElement('canvas');
@@ -3313,11 +3670,23 @@
     g.globalAlpha = 1;
 
     // Headline is the net job area — everything measured, less everything cut
-    // out of it. This is the number someone orders against.
-    const totalSqft = measured.reduce((s, z) => s + zoneNetSqft(z), 0);
+    // out of it. This is the number someone orders against. In snow this
+    // must equal the surface rows the Snow block prints below (plow + walk +
+    // hand) — that's clearedSqft(), not a sum over `measured`, because
+    // `measured` is area-mode zones only and misses the square footage of a
+    // width-bearing walk run.
+    const totalSqft = isSnow() ? clearedSqft() : measured.reduce((s, z) => s + zoneNetSqft(z), 0);
     const totalSqm = totalSqft / 10.7639;
+    // The band must bracket the number it is printed under. `measured` drops
+    // snow storage from the headline, so the variance sum has to drop it too —
+    // otherwise a noisy storage zone widens the range around an area it is not
+    // part of. Cuts stay in: their uncertainty genuinely propagates into net
+    // area. A straight 2-pin run contributes nothing (areaSigmaSqm returns 0
+    // below 3 pins), but a bent run with 3+ pins does — the same closed-
+    // polygon formula runs on it since this function doesn't check zone mode.
+    const bandZones = drawn.filter(z => !(isSnow() && surfaceOf(z) === 'storage'));
     const bandSqft = 2 * Math.sqrt(
-      drawn.reduce((s, z) => { const v = areaSigmaSqm(z.pins); return s + v * v; }, 0)
+      bandZones.reduce((s, z) => { const v = areaSigmaSqm(z.pins); return s + v * v; }, 0)
     ) * 10.7639;
 
     g.fillStyle = '#2d6a2d';
@@ -3327,17 +3696,24 @@
     g.fillStyle = '#ffffff';
     g.font = `700 24px ${F}`;
     // A job of nothing but runs has no square footage to headline, so the
-    // total length takes the top slot instead.
-    const runOnly = !measured.length;
+    // total length takes the top slot instead. A snow site that is nothing
+    // but storage has no cleared area either — storage never counts as
+    // cleared — so it gets its own slot rather than reading as an empty run.
+    const runOnly = !measured.length && runs.length > 0;
+    const storageOnly = !measured.length && !runs.length && storageZones.length > 0;
     const headlineNum = runOnly
       ? Math.round(runs.reduce((s, z) => s + zoneLenFt(z), 0))
+      : storageOnly ? Math.round(clearedBySurface().storage)
       : Math.round(totalSqft);
     g.fillText(
       runOnly
         ? `TOTAL RUN · ${runs.length} LENGTH${runs.length !== 1 ? 'S' : ''}`
-        : cuts.length
-          ? `NET AREA · ${cuts.length} CUT-OUT${cuts.length !== 1 ? 'S' : ''} REMOVED`
-          : multi ? `TOTAL AREA · ${measured.length} ZONES` : 'ESTIMATED AREA',
+        : storageOnly
+          ? 'SNOW STORAGE'
+          : cuts.length
+            ? `NET AREA · ${cuts.length} CUT-OUT${cuts.length !== 1 ? 'S' : ''} REMOVED`
+            : multi ? `${isSnow() ? 'CLEARED' : 'TOTAL'} AREA · ${measured.length} ZONES`
+                    : (isSnow() ? 'CLEARED AREA' : 'ESTIMATED AREA'),
       W / 2, headH + 60);
     g.globalAlpha = 1;
 
@@ -3353,7 +3729,11 @@
 
     g.fillStyle = '#e8d9a8';
     g.font = `600 26px ${F}`;
-    if (!runOnly) {
+    // Storage's own position uncertainty isn't in bandSqft (bandZones drops
+    // storage the same way `measured` does), and totalSqft is 0 for a
+    // storage-only site, so there is no band to bracket the storage headline
+    // with — skip the range rather than print one around the wrong number.
+    if (!runOnly && !storageOnly) {
       g.fillText(
         `Range: ${Math.max(0, Math.round(totalSqft - bandSqft)).toLocaleString()} – ${Math.round(totalSqft + bandSqft).toLocaleString()} sq ft`,
         W / 2, headH + 275
@@ -3364,6 +3744,11 @@
     const extras = [];
     if (runOnly) {
       extras.push(`${(headlineNum / 3).toFixed(1)} yd`);
+    } else if (storageOnly) {
+      // totalSqm is 0 here (clearedSqft() excludes storage), so the acres/sq
+      // yd figures below would print against the wrong quantity — derive
+      // sq yd from the headline number itself instead.
+      extras.push(`${Math.round(headlineNum / 9).toLocaleString()} sq yd`);
     } else {
       if (acres >= 0.1) extras.push(`${acres.toFixed(2)} acres`);
       extras.push(`${Math.round(totalSqm * 1.19599).toLocaleString()} sq yd`);
@@ -3497,7 +3882,7 @@
     }
 
     // materials needed
-    if (materialRows.length) {
+    if (!isSnow() && materialRows.length) {
       g.textAlign = 'left';
       g.fillStyle = '#1a1a1a';
       g.font = `700 30px ${F}`;
@@ -3557,6 +3942,88 @@
       cursorY += 16;
     }
 
+    // snow — surfaces stay separate, because lot, sidewalk and stair work are
+    // separate line items to whoever prices this.
+    if (isSnow()) {
+      const s = clearedBySurface();
+      const ftv = v => Math.round(v).toLocaleString();
+      g.textAlign = 'left';
+      g.fillStyle = '#1a1a1a';
+      g.font = `700 30px ${F}`;
+      g.fillText('Snow', 40, cursorY);
+      cursorY += 40;
+
+      [['Plow', s.plow], ['Walk', s.walk], ['Hand', s.hand], ['Storage', s.storage]]
+        .filter(([, v]) => v > 0)
+        .forEach(([label, v]) => {
+          g.fillStyle = '#555';
+          g.font = `400 26px ${F}`;
+          g.textAlign = 'left';
+          g.fillText(label, 40, cursorY);
+          g.fillStyle = label === 'Storage' ? '#1c6fb0' : '#2d6a2d';
+          g.font = `700 26px ${F}`;
+          g.textAlign = 'right';
+          g.fillText(`${ftv(v)} ft²`, W - 40, cursorY);
+          cursorY += 42;
+        });
+
+      const vol = snowVolumeYd3(), cap = storageCapacityYd3();
+      const removal = parseFloat(state.snowJob.removalWindowHrs);
+      if (vol != null) {
+        const loads = haulLoads(vol);
+        let left, right;
+        if (removal > 0) {
+          left = `To remove (within ${removal} hr)`;
+          right = `${vol.toFixed(1)} yd³${loads != null ? ` / ${loads} loads` : ''}`;
+        } else if (cap != null && vol > cap) {
+          const over = vol - cap, ol = haulLoads(over);
+          left = 'Over storage by';
+          right = `${over.toFixed(1)} yd³${ol != null ? ` / ${ol} loads` : ''}`;
+        } else if (cap != null) {
+          left = 'Fits on site';
+          right = `${vol.toFixed(1)} yd³ of ${cap.toFixed(1)} yd³`;
+        } else {
+          left = 'Snow volume';
+          right = `${vol.toFixed(1)} yd³`;
+        }
+        g.textAlign = 'left';
+        g.fillStyle = '#2d6a2d';
+        g.font = `800 28px ${F}`;
+        g.fillText(left, 40, cursorY + 6);
+        g.textAlign = 'right';
+        g.fillText(right, W - 40, cursorY + 6);
+        cursorY += 44;
+      }
+
+      const tons = iceControlTons();
+      if (tons != null) {
+        g.fillStyle = '#555';
+        g.font = `400 26px ${F}`;
+        g.textAlign = 'left';
+        g.fillText('Ice control, per application', 40, cursorY);
+        g.fillStyle = '#2d6a2d';
+        g.font = `700 26px ${F}`;
+        g.textAlign = 'right';
+        g.fillText(`${tons.toFixed(2)} t`, W - 40, cursorY);
+        cursorY += 42;
+      }
+
+      // Contract terms ride on the card so they do not get lost between the
+      // walk and the estimate.
+      const trig = parseFloat(state.snowJob.triggerDepthIn);
+      const depth = parseFloat(state.snowJob.eventDepthIn);
+      const notes = [];
+      if (trig > 0) notes.push(`${fmtIn(trig)}" callout trigger`);
+      if (depth > 0) notes.push(`quantities at a ${fmtIn(depth)}" event`);
+      if (notes.length) {
+        g.fillStyle = '#555';
+        g.font = `400 24px ${F}`;
+        g.textAlign = 'left';
+        g.fillText(notes.join(' · '), 40, cursorY);
+        cursorY += 40;
+      }
+    }
+
     // footer meta
     g.textAlign = 'left';
     const allPins = drawn.flatMap(z => z.pins);
@@ -3612,6 +4079,7 @@
     renderPins();
     renderResult();
     renderLayers();
+    renderSnow();
     updateMapShape(opts);
     updateButtons();
   }
@@ -3621,6 +4089,46 @@
   // backgrounding, or crash mid-job shouldn't lose the pins/layers already
   // captured, so every mutation is autosaved to localStorage.
   const STORAGE_KEY = 'yardMeasureState';
+  const SNOW_PREFS_KEY = 'yardMeasureSnowPrefs';
+
+  function saveSnowPrefs() {
+    try { localStorage.setItem(SNOW_PREFS_KEY, JSON.stringify(state.snowPrefs)); }
+    catch (e) { /* storage unavailable or full — not fatal */ }
+  }
+
+  function loadSnowPrefs() {
+    try {
+      const raw = localStorage.getItem(SNOW_PREFS_KEY);
+      if (raw) Object.assign(state.snowPrefs, JSON.parse(raw));
+    } catch (e) { /* keep the defaults */ }
+  }
+
+  // Contract terms cannot be a global preference — different customers, different
+  // terms — but retyping them per site is how the thirteenth site quietly ends up
+  // on the wrong trigger. So: a new job seeds from the last terms entered, and a
+  // saved job keeps its own.
+  const SNOW_TERMS_KEY = 'yardMeasureSnowTerms';
+
+  function saveSnowTerms() {
+    try {
+      localStorage.setItem(SNOW_TERMS_KEY, JSON.stringify({
+        removalWindowHrs: state.snowJob.removalWindowHrs,
+        triggerDepthIn: state.snowJob.triggerDepthIn,
+      }));
+    } catch (e) { /* storage unavailable or full — not fatal */ }
+  }
+
+  function loadSnowTerms() {
+    try {
+      const raw = localStorage.getItem(SNOW_TERMS_KEY);
+      if (!raw) return;
+      const t = JSON.parse(raw);
+      // Seed only what the current job has not already set, so reopening a
+      // saved job never has its own terms overwritten by stickiness.
+      if (!state.snowJob.removalWindowHrs) state.snowJob.removalWindowHrs = t.removalWindowHrs || '';
+      if (!state.snowJob.triggerDepthIn) state.snowJob.triggerDepthIn = t.triggerDepthIn || '';
+    } catch (e) { /* keep what is there */ }
+  }
 
   jobLabelInput.addEventListener('input', saveState);
 
@@ -3639,6 +4147,8 @@
         theme: state.theme,
         resultOpen: state.resultOpen,
         crosshair: state.crosshair,
+        season: state.season,
+        snowJob: state.snowJob,
       }));
     } catch (e) { /* storage unavailable or full — not fatal */ }
     syncCurrentJob();
@@ -3653,10 +4163,21 @@
     } catch (e) { return false; }
     if (!saved) return false;
 
+    // Season and its settings are app state, not tied to whether any zone
+    // was ever drawn. A season toggled with nothing on the map yet must
+    // still survive a reload, so this runs before the zones-length branch
+    // below can return early and skip it.
+    if (saved.season === 'snow') state.season = 'snow';
+    if (saved.snowJob) Object.assign(state.snowJob, saved.snowJob);
+
     if (saved.v === 2 && Array.isArray(saved.zones) && saved.zones.length) {
       state.zones = saved.zones;
       // Jobs saved before cut-outs existed have no mode; they were all areas.
       state.zones.forEach(z => { if (!z.mode) z.mode = 'area'; });
+      // Jobs saved before snow mode carry no surface; they were summer work,
+      // and plow is the harmless default since nothing reads it until the
+      // season is switched.
+      state.zones.forEach(z => { if (!z.surface) z.surface = 'plow'; });
       state.activeZoneId = saved.activeZoneId;
       state.nextZoneId = saved.nextZoneId || state.zones.length + 1;
       state.nextPinId = saved.nextPinId ||
@@ -3711,6 +4232,21 @@
     applyTheme();
     saveState();
     showToast(THEME_NAME[state.theme]);
+  });
+
+  const seasonBtn = document.getElementById('season-btn');
+  // The button's tint must always agree with state.season, not just right
+  // after a tap — a restored snow job or a season carried in by openJob()
+  // both change state.season without going through the click handler.
+  function syncSeasonBtn() {
+    seasonBtn.classList.toggle('active', isSnow());
+  }
+  seasonBtn.addEventListener('click', () => {
+    state.season = isSnow() ? 'summer' : 'snow';
+    syncSeasonBtn();
+    renderAll();
+    saveState();
+    showToast(isSnow() ? 'Snow season' : 'Summer season');
   });
 
   // ── RESULT BAR ───────────────────────────────────────
@@ -3826,8 +4362,58 @@
     return lines.join('\n');
   }
 
+  function snowSummaryText() {
+    const s = clearedBySurface();
+    const ft = v => Math.round(v).toLocaleString();
+    const lines = [jobTitle(), new Date().toLocaleString(), '', 'SNOW'];
+
+    state.zones.filter(isDrawn).filter(z => !isCut(z)).forEach(z => {
+      const sqft = zoneSnowSqft(z);
+      const bits = [`${SURFACE_LABEL[surfaceOf(z)]}`];
+      if (isLine(z)) bits.push(`${ft(zoneLenFt(z))} linear ft`);
+      if (sqft > 0) bits.push(`${ft(sqft)} sq ft`);
+      else if (isLine(z)) bits.push('no width set — no area');
+      lines.push(`${z.name}: ${bits.join(' · ')}`);
+    });
+
+    lines.push('');
+    if (s.plow > 0) lines.push(`PLOW: ${ft(s.plow)} sq ft`);
+    if (s.walk > 0) lines.push(`WALK: ${ft(s.walk)} sq ft`);
+    if (s.hand > 0) lines.push(`HAND: ${ft(s.hand)} sq ft`);
+    if (s.storage > 0) lines.push(`STORAGE: ${ft(s.storage)} sq ft`);
+
+    const vol = snowVolumeYd3(), cap = storageCapacityYd3();
+    const removal = parseFloat(state.snowJob.removalWindowHrs);
+    if (vol != null) {
+      const loads = haulLoads(vol);
+      if (removal > 0) {
+        lines.push(`TO REMOVE: ${vol.toFixed(1)} yd³${loads != null ? ` / ${loads} loads` : ''} within ${removal} hr`);
+        if (cap != null) lines.push(`  can stage ${cap.toFixed(1)} yd³ on site`);
+      } else if (cap != null && vol > cap) {
+        const over = vol - cap, ol = haulLoads(over);
+        lines.push(`OVER STORAGE by ${over.toFixed(1)} yd³${ol != null ? ` / ${ol} loads` : ''}`);
+      } else if (cap != null) {
+        lines.push(`FITS: ${vol.toFixed(1)} yd³ into ${cap.toFixed(1)} yd³`);
+      } else {
+        lines.push(`SNOW: ${vol.toFixed(1)} yd³`);
+      }
+    }
+
+    const tons = iceControlTons();
+    if (tons != null) lines.push(`ICE CONTROL: ${tons.toFixed(2)} tons per application`);
+
+    // Contract terms travel with the measurement — a 1-inch trigger is exactly
+    // the sort of thing that gets lost between the walk and the estimate.
+    const trig = parseFloat(state.snowJob.triggerDepthIn);
+    if (trig > 0) lines.push(`TRIGGER: ${fmtIn(trig)}" callout`);
+
+    const depth = parseFloat(state.snowJob.eventDepthIn);
+    if (depth > 0) lines.push(`(quantities at a ${fmtIn(depth)}" event)`);
+    return lines.join('\n');
+  }
+
   copyBtn.addEventListener('click', async () => {
-    const text = jobSummaryText();
+    const text = isSnow() ? snowSummaryText() : jobSummaryText();
     try {
       await navigator.clipboard.writeText(text);
       showToast('Copied — paste into your bid');
@@ -3897,6 +4483,11 @@
       zones: state.zones,
       nextZoneId: state.nextZoneId,
       nextPinId: state.nextPinId,
+      // A job saved in snow reopens in snow. Without this, snow work opened in
+      // July shows the Materials panel and reads as though it vanished — the
+      // zone data is all still there, but nothing on screen says so.
+      season: state.season,
+      snowJob: { ...state.snowJob },
     };
   }
 
@@ -3937,7 +4528,18 @@
     state.jobId = job.id;
     state.jobStarted = job.started || job.savedAt;
     state.zones = job.zones || [];
-    state.zones.forEach(z => { if (!z.mode) z.mode = 'area'; });
+    state.zones.forEach(z => {
+      if (!z.mode) z.mode = 'area';
+      // Every consumer reads through surfaceOf(), so a missing surface is
+      // harmless today — but materialising it here keeps the two load paths
+      // (loadState and openJob) telling the same story about a zone.
+      if (!z.surface) z.surface = 'plow';
+    });
+    // A job saved before snow mode has no season; leave the app where it is
+    // rather than yanking a crew out of the season they are working in.
+    if (job.season) state.season = job.season;
+    if (job.snowJob) Object.assign(state.snowJob, job.snowJob);
+    syncSeasonBtn();
     state.nextZoneId = job.nextZoneId || state.zones.length + 1;
     state.nextPinId = job.nextPinId ||
       state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
@@ -4034,7 +4636,12 @@
   }
 
   // ── INIT ─────────────────────────────────────────────
+  loadSnowPrefs();
   const restored = loadState();
+  // Must run after loadState(): stickiness only seeds fields the restored job
+  // left blank, and must land before the first renderAll() below or the
+  // seeded terms won't appear in the inputs until something else re-renders.
+  loadSnowTerms();
   // Work restored from before job history existed still needs an id, or it
   // could never be filed.
   if (!state.jobId) {
@@ -4042,6 +4649,7 @@
     state.jobStarted = state.jobStarted || Date.now();
   }
   applyTheme();
+  syncSeasonBtn();
   resultArea.setAttribute('aria-expanded', String(!!state.resultOpen));
   setCrosshair(!!state.crosshair);
   syncBarHeights();
