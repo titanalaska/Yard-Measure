@@ -257,6 +257,35 @@ on crew phones.
 - Separate ice-control rates per surface — one rate over total cleared area;
   revisit only if it bites
 
+## Known limitations, as built (2026-08-26)
+
+**The accuracy range under the snapshot headline does not model a sidewalk's
+width uncertainty.** The band comes from `areaSigmaSqm`, which propagates GPS
+uncertainty around a closed polygon. A run measured as two pins plus a typed
+width contributes nothing to it. Since runs now feed the cleared-area headline,
+the printed range under-states true uncertainty whenever runs make up a large
+share of the job.
+
+Practical reading: a mostly-plow lot is unaffected — the shortfall is a small
+fraction of the total. **A sidewalk-heavy or sidewalk-only job should treat the
+printed range as optimistic.** Note also that a typed width is a judgment, not a
+measurement, so no GPS-derived formula was ever going to model it well; fixing
+this properly means deciding what uncertainty a typed width even carries.
+
+**Storage-only sites** export under a distinct `SNOW STORAGE` headline with no
+range, because there is no measured cleared area to bracket.
+
+**Every judgment value ships empty** — packing factor, compaction ratio, truck
+capacity, ice-control rate. Until they are filled in once, the storage verdict
+reports what it still needs rather than showing a number. This is deliberate;
+see the no-invented-constants rule above. `pileHeightFt` is the exception at
+20 ft.
+
+**Nothing here has been used on a phone in a yard.** Browser assertions prove
+the arithmetic and a human confirmed the exported cards by eye, but neither
+proves the panel is usable with gloves on in February. See the field-confirmation
+list in the implementation plan.
+
 ## Testing
 
 The app is a single HTML file with no test harness, and the measuring engine is
