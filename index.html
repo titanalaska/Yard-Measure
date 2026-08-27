@@ -1680,6 +1680,15 @@
       removalWindowHrs: '',
       triggerDepthIn: '',
     },
+    // How Titan builds fence, not a fact about any one site — so it outlives
+    // the job. Both ship EMPTY and are retained once entered: the app must
+    // never assert a spacing it made up, and must never ask twice. Post
+    // spacing is genuinely unsettled (panel widths constrain it; chainlink
+    // runs further), and hole depth here is driven by frost.
+    fencePrefs: {
+      spacingFt: '',
+      bagsPerPost: '',
+    },
   };
 
   const icon = (id, cls) => `<svg class="ic ${cls || ''}"><use href="#i-${id}"/></svg>`;
@@ -4124,6 +4133,20 @@
     } catch (e) { /* keep the defaults */ }
   }
 
+  const FENCE_PREFS_KEY = 'yardMeasureFencePrefs';
+
+  function saveFencePrefs() {
+    try { localStorage.setItem(FENCE_PREFS_KEY, JSON.stringify(state.fencePrefs)); }
+    catch (e) { /* storage unavailable or full — not fatal */ }
+  }
+
+  function loadFencePrefs() {
+    try {
+      const raw = localStorage.getItem(FENCE_PREFS_KEY);
+      if (raw) Object.assign(state.fencePrefs, JSON.parse(raw));
+    } catch (e) { /* keep the defaults */ }
+  }
+
   // Contract terms cannot be a global preference — different customers, different
   // terms — but retyping them per site is how the thirteenth site quietly ends up
   // on the wrong trigger. So: a new job seeds from the last terms entered, and a
@@ -4671,6 +4694,9 @@
 
   // ── INIT ─────────────────────────────────────────────
   loadSnowPrefs();
+  // Must land before the first renderAll() below, or a remembered spacing
+  // won't appear in the inputs until something else forces a re-render.
+  loadFencePrefs();
   const restored = loadState();
   // Must run after loadState(): stickiness only seeds fields the restored job
   // left blank, and must land before the first renderAll() below or the
