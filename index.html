@@ -2937,6 +2937,56 @@
     renderSnowStorage();
   });
 
+  // ── FENCE ────────────────────────────────────────────
+  // A fence is bought as posts and sections, not by the foot — and the app
+  // already knows where the corner posts go, because every pin on a run IS a
+  // vertex. First and last are terminals, interior pins are corners, line posts
+  // fall between at the shop's spacing. A tape measure cannot hand you that.
+  function segmentLengthsFt(z) {
+    const pts = project(z.pins);
+    const out = [];
+    for (let i = 1; i < pts.length; i++)
+      out.push(Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) * M_TO_FT);
+    return out;
+  }
+
+  function fenceCounts(z) {
+    if (!isFence(z)) return null;
+    const spacing = parseFloat(state.fencePrefs.spacingFt);
+    if (!(spacing > 0)) return null;   // blank spacing: say what is needed, never guess
+
+    // Per segment, NOT on the total. A bend forces a post onto the corner, so
+    // each straight run rounds up on its own. ceil(total / spacing) would
+    // under-count posts on every fence that turns — and most fences turn.
+    // max(1, …) covers a segment shorter than one bay, which still needs a bay.
+    const segs = segmentLengthsFt(z);
+    const sections = segs.reduce((s, len) => s + Math.max(1, Math.ceil(len / spacing)), 0);
+
+    const posts = sections + 1;        // an open path with S bays has S+1 posts
+    const n = z.pins.length;
+    const terminal = 2;                // the two ends
+    const corner = Math.max(0, n - 2); // every interior vertex
+    const line = Math.max(0, posts - terminal - corner);
+
+    const gates = z.gates || [];
+    const gateCount = gates.length;
+    const gateWidthFt = gates.reduce((s, g) => s + (parseFloat(g.widthFt) || 0), 0);
+    const runFt = zoneLenFt(z);
+    const netFenceFt = Math.max(0, runFt - gateWidthFt);
+    // Two per opening. Whether one doubles as a line post depends on where the
+    // gate falls and how the crew frames it — that is the estimator's call, so
+    // gate posts are reported on their own line rather than netted off.
+    const gatePosts = gateCount * 2;
+
+    const bagsPer = parseFloat(state.fencePrefs.bagsPerPost);
+    const bags = bagsPer > 0 ? Math.ceil((posts + gatePosts) * bagsPer) : null;
+
+    return { runFt, sections, posts, terminal, corner, line,
+             gateCount, gateWidthFt, netFenceFt, gatePosts, bags };
+  }
+
+  const fenceRuns = () => state.zones.filter(isFence);
+
   // ── LIVE MAP (MapLibre + Alaska imagery) ─────────────
   // Real aerial imagery under the walked perimeter, so odd/notched shapes can
   // be checked against the actual property. The map is also an input: corners
