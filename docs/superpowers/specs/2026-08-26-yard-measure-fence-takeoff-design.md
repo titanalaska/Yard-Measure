@@ -56,9 +56,19 @@ explicitly **out of scope for v1**. Build them only if someone asks.
 in the same way `surface` is, or from the panel. An unmarked run behaves exactly
 as it does today.
 
-This is deliberately **not** a season toggle. Snow needed one because it changed
-what every measurement meant. Fence changes what one *run* produces, and fence
-work happens in the same season as everything else in the app.
+### Fence is summer work
+
+**The fence marking and the Fence panel appear only when the season is summer,
+gated on `!isSnow()`.** Fence does not get its own season — it lives inside the
+one that already exists.
+
+A run in snow is a sidewalk carrying a width so it yields area to clear. A run in
+summer can be a fence carrying posts and gates. Those are two different questions
+about the same geometry, and showing either one in the other's season is noise on
+a phone screen that has very little room to spare.
+
+This also means the two features never collide: `widthFt` is read only in snow,
+`fence`/`gates` only in summer, and neither needs to know about the other.
 
 ### Shop settings — persist across jobs
 
@@ -68,7 +78,36 @@ work happens in the same season as everything else in the app.
 - `bagsPerPost` — concrete per hole
 
 Both describe how Titan builds, not a particular site, so they outlive a job.
-Both **ship empty**: see "Open questions".
+
+### Blank first, then remembered
+
+**Ship empty, then retain what the user entered.** The first time anyone opens
+the panel there is no spacing and no bags-per-post, and the panel says what it
+still needs rather than showing a number. The moment Joe types 8, that becomes
+the value every later job starts from.
+
+This is the resolution to a tension the snow work left half-solved. The rule
+against invented constants exists because a number chosen in code reads as fact
+six months later and nobody remembers where it came from. But shipping blank
+forever means retyping the same figure on every job, which is its own way of
+getting a number wrong — the snow contract terms hit exactly that, thirteen sites
+deep.
+
+Retention gets both: **the app never asserts a value it made up, and never asks
+twice.** The default is learned from the person who knows, not guessed by the
+person who doesn't. A remembered value is also self-correcting — if Joe's shop
+practice changes, he types the new number once.
+
+Two honest limits, neither blocking:
+
+- **Retention is per device.** `localStorage` lives in one browser on one phone.
+  If Joe sets spacing on his phone, Matt's phone still starts blank. Same as the
+  snow settings, and acceptable for the same reason: the person doing the
+  measuring is the person whose number it is.
+- **Spacing may not be one number.** Panel fences are constrained by panel width;
+  chainlink line posts commonly run further apart. If it turns out to differ by
+  fence type, retention keys per type rather than globally — one more reason not
+  to have shipped a single invented default.
 
 ### Per run
 
@@ -165,9 +204,11 @@ feet never get summed into square feet.
 3. **Whether Joe tracks gates per run or totals them at the end.** The spec assumes
    per run. If he totals them, the model simplifies.
 
-Until 1 and 2 are answered, both fields ship blank and the panel reports what it
-still needs rather than showing a number — the same behaviour the snow judgment
-values have.
+**These do not block the build.** Under "Blank first, then remembered", both
+fields ship empty and the panel reports what it still needs rather than showing a
+number. Whoever answers them answers them *into the app*, once, and it keeps
+them from then on — so the questions resolve themselves through use rather than
+holding up the work.
 
 ## Corroboration from Titan's own records
 
