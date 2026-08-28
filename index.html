@@ -876,6 +876,54 @@
     border-color: var(--green-light);
   }
 
+  /* Settings rows are a label and a number. These inputs had no width rule at
+     all, so they fell back to the browser's default number-input width and ate
+     half the row for a value nobody types more than three digits into — while
+     the label, which is the part that has to explain itself, got squeezed.
+     Number narrow and right-aligned, words wide. */
+  #snow-settings .layer-row1,
+  #fence-settings .layer-row1 {
+    align-items: flex-start;
+  }
+
+  #snow-settings .layer-row1 > span,
+  #fence-settings .layer-row1 > span {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.35;
+  }
+
+  /* The parenthetical becomes a proper sub-label on its own line rather than a
+     run-on inside the name. It is doing real work — it is where someone learns
+     what to put in the box — so it gets to be readable. */
+  #snow-settings .layer-row1 em,
+  #fence-settings .layer-row1 em {
+    display: block;
+    font-style: normal;
+    font-size: 12px;
+    opacity: 0.68;
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+
+  #snow-settings .layer-row1 input,
+  #fence-settings .layer-row1 input {
+    flex: 0 0 76px;
+    width: 76px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    text-align: right;
+  }
+
+  #snow-settings .layer-row1 input:focus,
+  #fence-settings .layer-row1 input:focus {
+    outline: none;
+    border-color: var(--green-light);
+  }
+
   .layer-unit {
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -3080,12 +3128,12 @@
     snowSettingsEl.innerHTML = `
       <div class="layer-item">
         <div class="layer-row1"><span>Event depth</span>${num('snow-eventDepthIn', j.eventDepthIn, 'in', '0.5')}</div>
-        <div class="layer-row1"><span>Compaction <em>(how far it packs down — 3 means 12 in of snow packs to 4 in. Dry powder shrinks most, wet snow least)</em></span>${num('snow-compactionRatio', j.compactionRatio, 'e.g. 3', '0.5')}</div>
+        <div class="layer-row1"><span>Compaction <em>how far it packs down — 3 means 12 in of snow packs to 4 in. Dry powder shrinks most, wet snow least</em></span>${num('snow-compactionRatio', j.compactionRatio, 'e.g. 3', '0.5')}</div>
         <div class="layer-row1"><span>Pile height (finished, ft)</span>${num('snow-pileHeightFt', p.pileHeightFt, 'ft', '1')}</div>
-        <div class="layer-row1"><span>Packing factor <em>(how much of the box the pile fills — flat-topped pile ≈ 0.55, cone ≈ 0.33, ridge ≈ 0.5)</em></span>${num('snow-packingFactor', p.packingFactor, 'e.g. 0.55', '0.05')}</div>
+        <div class="layer-row1"><span>Packing factor <em>how much of the box the pile fills — flat-topped pile ≈ 0.55, cone ≈ 0.33, ridge ≈ 0.5</em></span>${num('snow-packingFactor', p.packingFactor, 'e.g. 0.55', '0.05')}</div>
         <div class="layer-row1"><span>Truck capacity</span>${num('snow-truckCapacityYd3', p.truckCapacityYd3, 'yd³', '1')}</div>
         <div class="layer-row1"><span>Ice control rate</span>${num('snow-sandRateLbsPer1000', p.sandRateLbsPer1000, 'lb per 1,000 ft²', '1')}</div>
-        <div class="layer-row1"><span>Removal window <em>(blank if the contract has none)</em></span>${num('snow-removalWindowHrs', j.removalWindowHrs, 'hr', '1')}</div>
+        <div class="layer-row1"><span>Removal window <em>blank if the contract has none</em></span>${num('snow-removalWindowHrs', j.removalWindowHrs, 'hr', '1')}</div>
         <div class="layer-row1"><span>Callout trigger</span>${num('snow-triggerDepthIn', j.triggerDepthIn, 'in', '0.5')}</div>
       </div>`;
   }
