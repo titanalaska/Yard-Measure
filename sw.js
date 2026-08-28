@@ -17,7 +17,7 @@
  * Bump CACHE_VERSION on deploy; old caches are dropped on activate.
  */
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const SHELL_CACHE = `ym-shell-${CACHE_VERSION}`;
 const LIB_CACHE = `ym-lib-${CACHE_VERSION}`;
 const TILE_CACHE = `ym-tiles-${CACHE_VERSION}`;
