@@ -2025,6 +2025,12 @@
     if (act === 'delete') {
       if (!confirm(`Delete "${zone.name}" and its pins?`)) return;
       state.zones = state.zones.filter(z => z.id !== zone.id);
+      // Deleting the zone takes its pending move with it. Nothing can misfire
+      // today — zone ids are never reused within a job and lastMove is not
+      // persisted — but that is an invariant held up by two facts far from
+      // here, and this file has twice been bitten by exactly that kind of
+      // reasoning. Cheaper to not depend on it.
+      clearLastMoveFor(zone);
       ensureZone();
       renderAll({ fit: true });
       saveState();
