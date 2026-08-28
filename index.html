@@ -1587,9 +1587,6 @@
     <button id="lock-btn" class="map-ctrl" type="button" title="Lock the map">
       <svg class="ic"><use href="#i-unlock" id="lock-icon"/></svg>
     </button>
-    <button id="pin-lock-btn" class="map-ctrl" type="button" title="Pins locked — tap to move pins">
-      <svg class="ic"><use href="#i-pin-lock"/></svg>
-    </button>
   </div>
 
   <div id="map-tools-right">
@@ -1601,7 +1598,15 @@
     </button>
   </div>
 
+  <!-- Pin lock lives in the bottom row, not the left column. The left column
+       is anchored top-left and grows downward; a fourth button there pushed it
+       into this row and the two overlapped on a condensed map — visible only
+       at the short height, since full screen has room to spare. This row is
+       where the file already says occasional toggles belong. -->
   <div id="map-tools-bottom">
+    <button id="pin-lock-btn" class="map-ctrl" type="button" title="Pins locked — tap to move pins">
+      <svg class="ic"><use href="#i-pin-lock"/></svg>
+    </button>
     <button id="parcel-btn" class="map-ctrl" type="button" title="Show lot lines">
       <svg class="ic"><use href="#i-grid"/></svg>
     </button>
