@@ -1587,9 +1587,6 @@
     <button id="lock-btn" class="map-ctrl" type="button" title="Lock the map">
       <svg class="ic"><use href="#i-unlock" id="lock-icon"/></svg>
     </button>
-    <button id="pin-lock-btn" class="map-ctrl" type="button" title="Pins locked — tap to move pins">
-      <svg class="ic"><use href="#i-pin-lock"/></svg>
-    </button>
   </div>
 
   <div id="map-tools-right">
@@ -1601,7 +1598,15 @@
     </button>
   </div>
 
+  <!-- Pin lock lives in the bottom row, not the left column. The left column
+       is anchored top-left and grows downward; a fourth button there pushed it
+       into this row and the two overlapped on a condensed map — visible only
+       at the short height, since full screen has room to spare. This row is
+       where the file already says occasional toggles belong. -->
   <div id="map-tools-bottom">
+    <button id="pin-lock-btn" class="map-ctrl" type="button" title="Pins locked — tap to move pins">
+      <svg class="ic"><use href="#i-pin-lock"/></svg>
+    </button>
     <button id="parcel-btn" class="map-ctrl" type="button" title="Show lot lines">
       <svg class="ic"><use href="#i-grid"/></svg>
     </button>
@@ -3079,9 +3084,31 @@
       : '';
 
     if (vol == null) {
+      // Name the gap that is actually stopping the volume. This used to blame
+      // the event depth and compaction ratio in every case — including when
+      // both were filled in and the real problem was no cleared ground at all,
+      // or a sidewalk with no width. A site of nothing but storage was told to
+      // set two fields it had already set.
+      const clearedSf = clearedSqft();
+      const depthSet = parseFloat(state.snowJob.eventDepthIn) > 0;
+      const ratioSet = parseFloat(state.snowJob.compactionRatio) > 0;
+      let why;
+      if (!(clearedSf > 0)) {
+        const widthless = state.zones.filter(z =>
+          isDrawn(z) && isLine(z) && surfaceOf(z) !== 'storage' && !(parseFloat(z.widthFt) > 0)).length;
+        why = widthless
+          ? 'Nothing to clear yet — give the run a width so it counts as area'
+          : 'Nothing to clear yet — mark a zone as plow, walk or hand';
+      } else if (!depthSet && !ratioSet) {
+        why = 'Set an event depth and a compaction ratio for a volume';
+      } else if (!depthSet) {
+        why = 'Set an event depth for a volume';
+      } else {
+        why = 'Set a compaction ratio for a volume';
+      }
       snowStorageEl.innerHTML = (head
-        ? `${head}<br><span style="font-weight:400;">Set an event depth and a compaction ratio to compare it against a storm</span>`
-        : `<div class="empty-state">Set an event depth and a compaction ratio for a volume</div>`) + termsLine;
+        ? `${head}<br><span style="font-weight:400;">${why}</span>`
+        : `<div class="empty-state">${why}</div>`) + termsLine;
       return;
     }
 
@@ -4173,6 +4200,10 @@
       const snowSurfaceH = clearedBySurface();
       const surfaceRowsH = SURFACES.filter(k => snowSurfaceH[k] > 0).length;
       H += 40 + surfaceRowsH * 42;
+      // The "Storage holds" row draws whenever a capacity can be worked out,
+      // independent of whether a storm has been entered — so it is reserved on
+      // exactly that condition, not on the volume's.
+      if (storageCapacityYd3() != null) H += 42;
       if (snowVolumeYd3() != null) H += 44;
       if (iceControlTons() != null) H += 42;
       if (parseFloat(state.snowJob.triggerDepthIn) > 0 || parseFloat(state.snowJob.eventDepthIn) > 0) H += 40;
@@ -4561,6 +4592,25 @@
 
       const vol = snowVolumeYd3(), cap = storageCapacityYd3();
       const removal = parseFloat(state.snowJob.removalWindowHrs);
+
+      // What the storage holds goes on the card whether or not a storm has been
+      // entered. This block used to sit entirely inside `if (vol != null)`, so a
+      // site with a measured pile area and a known capacity exported its square
+      // footage and nothing else — the same defect that was fixed on screen and
+      // not carried through to the export. Capacity is a fact about the site.
+      if (cap != null) {
+        const emptyLoads = haulLoads(cap);
+        g.fillStyle = '#555';
+        g.font = `400 26px ${F}`;
+        g.textAlign = 'left';
+        g.fillText('Storage holds', 40, cursorY);
+        g.fillStyle = '#1c6fb0';
+        g.font = `700 26px ${F}`;
+        g.textAlign = 'right';
+        g.fillText(`${cap.toFixed(1)} yd³${emptyLoads != null ? ` / ${emptyLoads.toLocaleString()} loads to empty` : ''}`, W - 40, cursorY);
+        cursorY += 42;
+      }
+
       if (vol != null) {
         const loads = haulLoads(vol);
         let left, right;
@@ -5072,18 +5122,28 @@
 
     const vol = snowVolumeYd3(), cap = storageCapacityYd3();
     const removal = parseFloat(state.snowJob.removalWindowHrs);
+
+    // Capacity is a fact about the site, so it goes out whether or not a storm
+    // has been entered. Gating it on the volume meant a site with a measured
+    // pile area exported its square footage and nothing about what it holds.
+    if (cap != null) {
+      const emptyLoads = haulLoads(cap);
+      lines.push(`STORAGE HOLDS: ${cap.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} yd³`
+        + (emptyLoads != null ? ` / ${emptyLoads.toLocaleString()} loads to empty` : ''));
+    }
+
     if (vol != null) {
       const loads = haulLoads(vol);
       if (removal > 0) {
-        lines.push(`TO REMOVE: ${vol.toFixed(1)} yd³${loads != null ? ` / ${loads} loads` : ''} within ${removal} hr`);
-        if (cap != null) lines.push(`  can stage ${cap.toFixed(1)} yd³ on site`);
+        // Capacity is already stated above as STORAGE HOLDS, so no repeat here.
+        lines.push(`TO REMOVE: ${vol.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} yd³${loads != null ? ` / ${loads} loads` : ''} within ${removal} hr`);
       } else if (cap != null && vol > cap) {
         const over = vol - cap, ol = haulLoads(over);
-        lines.push(`OVER STORAGE by ${over.toFixed(1)} yd³${ol != null ? ` / ${ol} loads` : ''}`);
+        lines.push(`OVER STORAGE by ${over.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} yd³${ol != null ? ` / ${ol} loads` : ''}`);
       } else if (cap != null) {
-        lines.push(`FITS: ${vol.toFixed(1)} yd³ into ${cap.toFixed(1)} yd³`);
+        lines.push(`FITS: ${vol.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} yd³ into ${cap.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} yd³`);
       } else {
-        lines.push(`SNOW: ${vol.toFixed(1)} yd³`);
+        lines.push(`SNOW: ${vol.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} yd³`);
       }
     }
 
