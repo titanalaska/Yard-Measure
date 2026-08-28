@@ -1,7 +1,7 @@
 {
   "name": "Yard Measure",
   "short_name": "Yard Measure",
-  "description": "Walk or tap out a yard and get square footage, material volumes and linear runs.",
+  "description": "Walk or tap out a site and get square footage, material volumes, linear runs, snow quantities and fence post counts.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
