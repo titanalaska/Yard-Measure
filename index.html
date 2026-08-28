@@ -2137,7 +2137,7 @@
     else z.pins.push(pin);
     // Placing a pin makes any stashed move no longer the last thing that
     // happened, so Undo must not reach back past it.
-    state.lastMove = null;
+    clearLastMoveFor(z);
     renderAll({ fit: !!(opts && opts.fit) });
     saveState();
   }
@@ -2195,7 +2195,7 @@
     let newest = 0;
     z.pins.forEach((p, i) => { if (p.id > z.pins[newest].id) newest = i; });
     z.pins.splice(newest, 1);
-    state.lastMove = null;
+    clearLastMoveFor(z);
     renderAll();
     saveState();
     showToast('Last pin removed');
@@ -2221,7 +2221,7 @@
     // still counted, still printed on the card.
     z.gates = [];
     z.nextGateId = 1;
-    state.lastMove = null;
+    clearLastMoveFor(z);
     renderAll();
     saveState();
   });
@@ -2253,6 +2253,11 @@
       return;
     } else if (act === 'remove') {
       z.pins.splice(i, 1);
+      // Deleting a pin makes the delete the last thing that happened, so a
+      // stashed drag must not survive it. Without this, deleting one pin and
+      // then tapping Undo silently replays an older move on a DIFFERENT pin —
+      // the corner you never touched jumps back.
+      clearLastMoveFor(z);
     } else {
       return;
     }
@@ -3615,6 +3620,13 @@
   // instead of the map. The marker wins the gesture, the corner moves, and
   // nothing says so — the drag also rewrites that pin's accuracy and throws
   // away its GPS samples, so a walked corner quietly becomes a tapped one.
+  // Only this zone's stash goes. A pending move in another zone is still the
+  // last thing that happened THERE, and discarding it because the user tidied
+  // up somewhere else throws away a legitimate undo they can never get back.
+  function clearLastMoveFor(z) {
+    if (state.lastMove && state.lastMove.zoneId === z.id) state.lastMove = null;
+  }
+
   function setPinsLocked(on) {
     state.pinsLocked = on;
     pinLockBtn.classList.toggle('on', !on);   // loud when pins CAN move
@@ -5093,15 +5105,17 @@
       state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
     state.activeZoneId = state.zones.length ? state.zones[0].id : null;
     jobLabelInput.value = /^Untitled — /.test(job.name) ? '' : job.name;
+    // A different job is a fresh walk, and a walk never needs to drag a corner.
+    // Without this, one unlock leaks into every job opened afterwards and the
+    // protection is gone without anyone noticing. Set before the render, the
+    // same way startNewJob() does — the two were asymmetric, which is fragile
+    // if either ever gains an await.
+    setPinsLocked(true);
+    state.lastMove = null;
     ensureZone();
     renderAll({ fit: true });
     saveState();
     closeJobs();
-    // A different job is a fresh walk, and a walk never needs to drag a corner.
-    // Without this, one unlock leaks into every job opened afterwards and the
-    // protection is gone without anyone noticing.
-    setPinsLocked(true);
-    state.lastMove = null;
     showToast(`Opened ${job.name}`);
   }
 
