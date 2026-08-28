@@ -808,8 +808,9 @@
     padding: 16px 16px 0;
   }
 
-  /* Fence replaces the layers panel in summer the same way snow does in
-     winter, so it needs the same edge padding. */
+  /* Fence sits alongside the layers panel — unlike snow, it does not replace
+     it, since a fence run can still carry material layers — so it needs the
+     same edge padding rather than fighting for the panel's whole width. */
   #fence-section {
     padding: 16px 16px 0;
   }
@@ -2151,8 +2152,13 @@
     // touches gates, so a run can reach zero pins with an opening still on it.
     // Without gates in this guard that zone is unclearable — the button does
     // nothing and the orphaned gate keeps reporting.
-    if (z.pins.length === 0 && z.layers.length === 0 && (z.gates || []).length === 0) return;
-    if (!confirm(`Clear all pins, layers, and gate openings in "${z.name}"?`)) return;
+    const hasGates = (z.gates || []).length > 0;
+    if (z.pins.length === 0 && z.layers.length === 0 && !hasGates) return;
+    // Only mention gate openings when there are any — a snow-mode area zone
+    // can never have gates, and naming them anyway reads as though this zone
+    // has something it doesn't.
+    const what = hasGates ? 'pins, layers, and gate openings' : 'pins and layers';
+    if (!confirm(`Clear all ${what} in "${z.name}"?`)) return;
     z.pins = [];
     z.layers = [];
     // Gates belong to a fence line. Clearing the line has to take them with
@@ -2980,24 +2986,11 @@
     return out;
   }
 
-  function fenceCounts(z) {
-    if (!isFence(z)) return null;
-    const spacing = parseFloat(state.fencePrefs.spacingFt);
-    if (!(spacing > 0)) return null;   // blank spacing: say what is needed, never guess
-
-    // Per segment, NOT on the total. A bend forces a post onto the corner, so
-    // each straight run rounds up on its own. ceil(total / spacing) would
-    // under-count posts on every fence that turns — and most fences turn.
-    // max(1, …) covers a segment shorter than one bay, which still needs a bay.
-    const segs = segmentLengthsFt(z);
-    const sections = segs.reduce((s, len) => s + Math.max(1, Math.ceil(len / spacing)), 0);
-
-    const posts = sections + 1;        // an open path with S bays has S+1 posts
-    const n = z.pins.length;
-    const terminal = 2;                // the two ends
-    const corner = Math.max(0, n - 2); // every interior vertex
-    const line = Math.max(0, posts - terminal - corner);
-
+  // Gate figures — the opening itself, not how the posts along the run are
+  // spaced — so they never depend on post spacing. Split out so a gate can be
+  // recorded (and the run card can show its width/net-fence effect) before
+  // spacing is ever set; only the section/post/concrete counts need it.
+  function gateStats(z) {
     const gates = z.gates || [];
     const gateCount = gates.length;
     const gateWidthFt = gates.reduce((s, g) => s + (parseFloat(g.widthFt) || 0), 0);
@@ -3007,12 +3000,45 @@
     // gate falls and how the crew frames it — that is the estimator's call, so
     // gate posts are reported on their own line rather than netted off.
     const gatePosts = gateCount * 2;
+    return { runFt, gateCount, gateWidthFt, netFenceFt, gatePosts };
+  }
+
+  function fenceCounts(z) {
+    if (!isFence(z)) return null;
+    const spacing = parseFloat(state.fencePrefs.spacingFt);
+    if (!(spacing > 0)) return null;   // blank spacing: say what is needed, never guess
+
+    // Per segment, NOT on the total. A bend forces a post onto the corner, so
+    // each straight run rounds up on its own. ceil(total / spacing) would
+    // under-count posts on every fence that turns — and most fences turn.
+    // max(1, …) covers a segment shorter than one bay, which still needs a bay.
+    // Segments under EPSILON_FT are skipped rather than rounded up to one bay:
+    // a double-tap or a pin dragged onto its neighbour produces a zero-length
+    // segment that was never actually walked, and counting it as a bay invents
+    // a phantom section, a phantom post and a corner post that isn't there.
+    const EPSILON_FT = 0.2;
+    const segs = segmentLengthsFt(z);
+    const sections = segs.reduce((s, len) =>
+      len < EPSILON_FT ? s : s + Math.max(1, Math.ceil(len / spacing)), 0);
+
+    const posts = sections + 1;        // an open path with S bays has S+1 posts
+    const n = z.pins.length;
+    const terminal = 2;                // the two ends
+    const corner = Math.max(0, n - 2); // every interior vertex
+    const line = Math.max(0, posts - terminal - corner);
+
+    const { runFt, gateCount, gateWidthFt, netFenceFt, gatePosts } = gateStats(z);
 
     const bagsPer = parseFloat(state.fencePrefs.bagsPerPost);
-    const bags = bagsPer > 0 ? Math.ceil((posts + gatePosts) * bagsPer) : null;
+    // bagsRaw is the unrounded figure, kept alongside bags so a job total can
+    // sum the raw figures across runs and ceil once — ceiling per run first
+    // and then summing over-counts (a three-run job at 0.5 bags/post can over-
+    // count by up to two bags purely from three separate roundings).
+    const bagsRaw = bagsPer > 0 ? (posts + gatePosts) * bagsPer : null;
+    const bags = bagsRaw != null ? Math.ceil(bagsRaw) : null;
 
     return { runFt, sections, posts, terminal, corner, line,
-             gateCount, gateWidthFt, netFenceFt, gatePosts, bags };
+             gateCount, gateWidthFt, netFenceFt, gatePosts, bagsRaw, bags };
   }
 
   const fenceRuns = () => state.zones.filter(isFence);
@@ -3021,6 +3047,10 @@
   // a walk gate on the side line are different openings on different fences.
   function addGate(z) {
     z.gates = z.gates || [];
+    // Belt and braces: every known load path now sets nextGateId, but this is
+    // the one place that would silently mint NaN ids if a fourth path ever
+    // missed it — an undefined counter here is worse than a wrong one.
+    z.nextGateId = z.nextGateId || 1;
     z.gates.push({ id: z.nextGateId++, widthFt: '' });
     saveState();
   }
@@ -3043,14 +3073,16 @@
     renderFenceSettings();
   }
 
+  // Spacing and gates are unrelated inputs — a gate is an opening at a place
+  // on the run, spacing is a shop practice for the posts between openings —
+  // so a blank spacing must not block recording a gate. Each run always
+  // renders its gates and the +Gate button; only the section/post numbers for
+  // that run are replaced with a note when spacing isn't set yet.
   function renderFenceRuns(runs) {
-    const spacing = parseFloat(state.fencePrefs.spacingFt);
-    if (!(spacing > 0)) {
-      fenceRunsEl.innerHTML = `<div class="empty-state">Set the post spacing below to get post and section counts</div>`;
-      return;
-    }
+    const hasSpacing = parseFloat(state.fencePrefs.spacingFt) > 0;
     fenceRunsEl.innerHTML = runs.map(z => {
-      const c = fenceCounts(z);
+      const c = hasSpacing ? fenceCounts(z) : null;
+      const gi = gateStats(z);
       const gates = (z.gates || []).map(g => `
         <div class="layer-row1">
           <span>Gate</span>
@@ -3060,12 +3092,14 @@
         </div>`).join('');
       return `
         <div class="layer-item" data-zone="${z.id}">
-          <div class="layer-row1"><strong>${escapeHtml(z.name)}</strong><span>${Math.round(c.runFt).toLocaleString()} ft</span></div>
-          <div class="layer-row1"><span>Sections</span><strong>${c.sections}</strong></div>
-          <div class="layer-row1"><span>Posts — ${c.terminal} end, ${c.corner} corner, ${c.line} line</span><strong>${c.posts}</strong></div>
+          <div class="layer-row1"><strong>${escapeHtml(z.name)}</strong><span>${Math.round(gi.runFt).toLocaleString()} ft</span></div>
+          ${c
+            ? `<div class="layer-row1"><span>Sections</span><strong>${c.sections}</strong></div>
+          <div class="layer-row1"><span>Posts — ${c.terminal} end, ${c.corner} corner, ${c.line} line</span><strong>${c.posts}</strong></div>`
+            : `<div class="empty-state">Set the post spacing below to get post and section counts</div>`}
           ${gates}
-          ${c.gateCount ? `<div class="layer-row1"><span>Gate posts</span><strong>${c.gatePosts}</strong></div>
-          <div class="layer-row1"><span>Net fence</span><strong>${Math.round(c.netFenceFt).toLocaleString()} ft</strong></div>` : ''}
+          ${gi.gateCount ? `<div class="layer-row1"><span>Gate posts</span><strong class="fence-gateposts-val">${gi.gatePosts}</strong></div>
+          <div class="layer-row1"><span>Net fence</span><strong class="fence-netfence-val">${Math.round(gi.netFenceFt).toLocaleString()} ft</strong></div>` : ''}
           <button class="btn btn-secondary fence-add-gate" data-zone="${z.id}">+ Gate</button>
         </div>`;
     }).join('');
@@ -3075,10 +3109,20 @@
     const cs = runs.map(fenceCounts).filter(Boolean);
     if (!cs.length) { fenceTotalEl.innerHTML = ''; return; }
     const sum = k => cs.reduce((s, c) => s + c[k], 0);
-    const bags = cs.every(c => c.bags != null) ? sum('bags') : null;
+    const gatePostsSum = sum('gatePosts');
+    // Posts and gate posts stay side by side, never summed into one figure —
+    // the app doesn't decide whether a gate post also serves as a line post,
+    // and this headline has to agree with the run cards above it, which have
+    // always shown c.posts on its own.
+    const postsLabel = gatePostsSum
+      ? `${sum('posts')} posts + ${gatePostsSum} gate posts`
+      : `${sum('posts')} posts`;
+    // Sum the unrounded per-run bag figures and ceil once here, rather than
+    // summing each run's already-ceiled figure — see fenceCounts()'s bagsRaw.
+    const bags = cs.every(c => c.bagsRaw != null) ? Math.ceil(sum('bagsRaw')) : null;
     fenceTotalEl.innerHTML =
-      `<strong>${sum('posts') + sum('gatePosts')} posts</strong> · ${sum('sections')} sections`
-      + `<br><span style="font-weight:400;">${sum('terminal')} end · ${sum('corner')} corner · ${sum('line')} line · ${sum('gatePosts')} gate</span>`
+      `<strong>${postsLabel}</strong> · ${sum('sections')} sections`
+      + `<br><span style="font-weight:400;">${sum('terminal')} end · ${sum('corner')} corner · ${sum('line')} line · ${gatePostsSum} gate</span>`
       + `<br><span style="font-weight:400;">${Math.round(sum('netFenceFt')).toLocaleString()} ft of fence`
       + (sum('gateCount') ? `, ${sum('gateCount')} gate${sum('gateCount') !== 1 ? 's' : ''} (${Math.round(sum('gateWidthFt')).toLocaleString()} ft)` : '')
       + `</span>`
@@ -3117,6 +3161,19 @@
     if (!g) return;
     g.widthFt = e.target.value;
     saveState();
+    // Net fence and Gate posts live on this run's own card, not just in the
+    // total below — update those two nodes in place rather than re-rendering
+    // the run list (which would blow away the caret mid-keystroke, the same
+    // trap the settings inputs avoid). gateStats(), not fenceCounts(), because
+    // this must also work before post spacing is ever set.
+    const gi = gateStats(z);
+    const card = fenceRunsEl.querySelector(`.layer-item[data-zone="${z.id}"]`);
+    if (card) {
+      const netEl = card.querySelector('.fence-netfence-val');
+      const gpEl = card.querySelector('.fence-gateposts-val');
+      if (netEl) netEl.textContent = `${Math.round(gi.netFenceFt).toLocaleString()} ft`;
+      if (gpEl) gpEl.textContent = `${gi.gatePosts}`;
+    }
     renderFenceTotal(fenceRuns());   // totals only — the caret is in the run list
   });
 
@@ -3862,12 +3919,18 @@
     // the total-posts line and the footer both cropped silently off the
     // bottom of the exported PNG. Row count: heading (40) + Sections + Posts
     // + [Gates, Gate posts] + Net fence + [Concrete] (42 each) + total (44).
-    const fenceCsForH = !isSnow() ? fenceRuns().map(fenceCounts).filter(Boolean) : [];
+    const fenceRunsForH = !isSnow() ? fenceRuns() : [];
+    const fenceCsForH = fenceRunsForH.map(fenceCounts).filter(Boolean);
     if (fenceCsForH.length) {
       const gateRows = fenceCsForH.reduce((s, c) => s + c.gateCount, 0) ? 2 : 0;
       const bagsRow = fenceCsForH.every(c => c.bags != null) ? 1 : 0;
       const fenceRows = 2 + gateRows + 1 + bagsRow;
       H += 40 + fenceRows * 42 + 44;
+    } else if (fenceRunsForH.length) {
+      // Runs are marked fence but spacing isn't set — the block still draws a
+      // heading and one note line, so it still needs a reservation or that
+      // line crops off the bottom of the PNG exactly like the cases above.
+      H += 40 + 42;
     }
     // Snow block height — mirrors the row-counting the sections above already
     // do, sized to the exact increments its drawing code below uses. Without
@@ -4180,7 +4243,8 @@
     }
 
     // fence — posts and sections, the numbers a material list is built from
-    const fenceCs = !isSnow() ? fenceRuns().map(fenceCounts).filter(Boolean) : [];
+    const fenceRunsForDraw = !isSnow() ? fenceRuns() : [];
+    const fenceCs = fenceRunsForDraw.map(fenceCounts).filter(Boolean);
     if (fenceCs.length) {
       const sum = k => fenceCs.reduce((s, c) => s + c[k], 0);
       g.textAlign = 'left';
@@ -4198,7 +4262,9 @@
         rows.push(['Gate posts', `${sum('gatePosts')}`]);
       }
       rows.push(['Net fence', `${Math.round(sum('netFenceFt')).toLocaleString()} ft`]);
-      if (fenceCs.every(c => c.bags != null)) rows.push(['Concrete', `${sum('bags')} bags`]);
+      // Sum the unrounded per-run figures and ceil once here — see
+      // fenceCounts()'s bagsRaw comment.
+      if (fenceCs.every(c => c.bagsRaw != null)) rows.push(['Concrete', `${Math.ceil(sum('bagsRaw'))} bags`]);
 
       rows.forEach(([label, val]) => {
         g.fillStyle = '#555';
@@ -4212,13 +4278,29 @@
         cursorY += 42;
       });
 
+      // Posts and gate posts side by side, never summed — see the run cards
+      // and renderFenceTotal() for the same rule.
+      const gatePostsSum = sum('gatePosts');
       g.textAlign = 'left';
       g.fillStyle = '#2d6a2d';
       g.font = `800 28px ${F}`;
-      g.fillText('Total posts', 40, cursorY + 6);
+      g.fillText('Posts', 40, cursorY + 6);
       g.textAlign = 'right';
-      g.fillText(`${sum('posts') + sum('gatePosts')}`, W - 40, cursorY + 6);
+      g.fillText(gatePostsSum ? `${sum('posts')} + ${gatePostsSum} gate` : `${sum('posts')}`, W - 40, cursorY + 6);
       cursorY += 44;
+    } else if (fenceRunsForDraw.length) {
+      // Runs are marked fence, but spacing isn't set — say so rather than
+      // silently dropping the section, which would read as "this fence has
+      // no posts" instead of "spacing hasn't been entered yet".
+      g.textAlign = 'left';
+      g.fillStyle = '#1a1a1a';
+      g.font = `700 30px ${F}`;
+      g.fillText('Fence', 40, cursorY);
+      cursorY += 40;
+      g.fillStyle = '#555';
+      g.font = `400 24px ${F}`;
+      g.fillText('Post spacing not set — counts omitted', 40, cursorY);
+      cursorY += 42;
     }
 
     // snow — surfaces stay separate, because lot, sidewalk and stair work are
@@ -4637,14 +4719,21 @@
   // without retyping. Deliberately no cost codes and no prices.
   function fenceSummaryLines() {
     const runs = fenceRuns();
-    const cs = runs.map(fenceCounts).filter(Boolean);
-    if (!cs.length) return [];
+    if (!runs.length) return [];
+    // Pair each run with its own counts (rather than indexing a filtered
+    // array by the unfiltered array's position) so a future run with no
+    // counts can't silently pair one run's name with another's numbers.
+    const paired = runs.map(z => ({ z, c: fenceCounts(z) })).filter(p => p.c);
+    if (!paired.length) {
+      // Every run here is marked fence but spacing isn't set, so fenceCounts
+      // has nothing to report — say so rather than silently dropping the
+      // section, which would otherwise read as "this fence has no posts".
+      return ['', 'FENCE', '   Post spacing not set — counts omitted'];
+    }
     const lines = ['', 'FENCE'];
     const ft = v => Math.round(v).toLocaleString();
 
-    runs.forEach((z, i) => {
-      const c = cs[i];
-      if (!c) return;
+    paired.forEach(({ z, c }) => {
       lines.push(`${z.name}`);
       lines.push(`   Run length          ${ft(c.runFt)} ft`);
       if (c.gateCount) {
@@ -4656,16 +4745,22 @@
       if (c.corner) lines.push(`   Corner posts        ${c.corner} ea`);
       lines.push(`   Line posts          ${c.line} ea`);
       if (c.gatePosts) lines.push(`   Gate posts          ${c.gatePosts} ea`);
-      lines.push(`   Total posts         ${c.posts + c.gatePosts} ea`);
+      // Posts and gate posts side by side, never summed — the app doesn't
+      // decide whether a gate post also serves as a line post.
+      lines.push(`   Posts               ${c.posts}${c.gatePosts ? ` + ${c.gatePosts} gate` : ''} ea`);
       if (c.bags != null) lines.push(`   Concrete            ${c.bags} bags`);
     });
 
-    if (cs.length > 1) {
+    if (paired.length > 1) {
+      const cs = paired.map(p => p.c);
       const sum = k => cs.reduce((s, c) => s + c[k], 0);
+      const gatePostsSum = sum('gatePosts');
       lines.push('');
-      lines.push(`FENCE TOTAL           ${sum('posts') + sum('gatePosts')} posts, ${sum('sections')} sections`);
+      lines.push(`FENCE TOTAL           ${sum('posts')}${gatePostsSum ? ` + ${gatePostsSum} gate` : ''} posts, ${sum('sections')} sections`);
       lines.push(`   Net fence           ${ft(sum('netFenceFt'))} ft`);
-      if (cs.every(c => c.bags != null)) lines.push(`   Concrete            ${sum('bags')} bags`);
+      // Sum the unrounded per-run figures and ceil once here — see
+      // fenceCounts()'s bagsRaw comment.
+      if (cs.every(c => c.bagsRaw != null)) lines.push(`   Concrete            ${Math.ceil(sum('bagsRaw'))} bags`);
     }
     return lines;
   }
@@ -4849,6 +4944,18 @@
     jobLabelInput.value = seed && seed.name ? seed.name : '';
     if (seed && seed.zones) {
       state.zones = JSON.parse(JSON.stringify(seed.zones));
+      // A duplicated job can be older than every field below — this is a third
+      // load path alongside loadState() and openJob(), and must apply the same
+      // defaults or a zone from before fence takeoff comes in with no
+      // nextGateId at all, and addGate() hands out NaN ids that neither the
+      // width input nor the remove button can ever match again.
+      state.zones.forEach(z => {
+        if (!z.mode) z.mode = 'area';
+        if (!z.surface) z.surface = 'plow';
+        if (typeof z.fence !== 'boolean') z.fence = false;
+        if (!Array.isArray(z.gates)) z.gates = [];
+        if (!z.nextGateId) z.nextGateId = 1;
+      });
       state.nextZoneId = seed.nextZoneId || state.zones.length + 1;
       state.nextPinId = seed.nextPinId ||
         state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
