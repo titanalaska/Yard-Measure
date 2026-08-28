@@ -3079,9 +3079,31 @@
       : '';
 
     if (vol == null) {
+      // Name the gap that is actually stopping the volume. This used to blame
+      // the event depth and compaction ratio in every case — including when
+      // both were filled in and the real problem was no cleared ground at all,
+      // or a sidewalk with no width. A site of nothing but storage was told to
+      // set two fields it had already set.
+      const clearedSf = clearedSqft();
+      const depthSet = parseFloat(state.snowJob.eventDepthIn) > 0;
+      const ratioSet = parseFloat(state.snowJob.compactionRatio) > 0;
+      let why;
+      if (!(clearedSf > 0)) {
+        const widthless = state.zones.filter(z =>
+          isDrawn(z) && isLine(z) && surfaceOf(z) !== 'storage' && !(parseFloat(z.widthFt) > 0)).length;
+        why = widthless
+          ? 'Nothing to clear yet — give the run a width so it counts as area'
+          : 'Nothing to clear yet — mark a zone as plow, walk or hand';
+      } else if (!depthSet && !ratioSet) {
+        why = 'Set an event depth and a compaction ratio for a volume';
+      } else if (!depthSet) {
+        why = 'Set an event depth for a volume';
+      } else {
+        why = 'Set a compaction ratio for a volume';
+      }
       snowStorageEl.innerHTML = (head
-        ? `${head}<br><span style="font-weight:400;">Set an event depth and a compaction ratio to compare it against a storm</span>`
-        : `<div class="empty-state">Set an event depth and a compaction ratio for a volume</div>`) + termsLine;
+        ? `${head}<br><span style="font-weight:400;">${why}</span>`
+        : `<div class="empty-state">${why}</div>`) + termsLine;
       return;
     }
 
