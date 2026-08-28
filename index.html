@@ -2126,7 +2126,11 @@
 
   clearBtn.addEventListener('click', () => {
     const z = activeZone();
-    if (z.pins.length === 0 && z.layers.length === 0) return;
+    // Gates can outlive the pins: Undo removes pins one at a time and never
+    // touches gates, so a run can reach zero pins with an opening still on it.
+    // Without gates in this guard that zone is unclearable — the button does
+    // nothing and the orphaned gate keeps reporting.
+    if (z.pins.length === 0 && z.layers.length === 0 && (z.gates || []).length === 0) return;
     if (!confirm(`Clear all pins, layers, and gate openings in "${z.name}"?`)) return;
     z.pins = [];
     z.layers = [];
