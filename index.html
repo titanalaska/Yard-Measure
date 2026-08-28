@@ -808,6 +808,12 @@
     padding: 16px 16px 0;
   }
 
+  /* Fence replaces the layers panel in summer the same way snow does in
+     winter, so it needs the same edge padding. */
+  #fence-section {
+    padding: 16px 16px 0;
+  }
+
   .layer-item {
     background: var(--surface);
     border-radius: 8px;
@@ -1600,6 +1606,16 @@
   <div id="snow-settings"></div>
 </div>
 
+<div id="fence-section" style="display:none;">
+  <div class="section-header">
+    <span class="section-title">Fence</span>
+    <span class="pin-count" id="fence-count">0 runs</span>
+  </div>
+  <div id="fence-runs"></div>
+  <div id="fence-total" class="layers-total"></div>
+  <div id="fence-settings"></div>
+</div>
+
 <div id="snapshot-section">
   <input type="text" id="job-label" placeholder="Job name or address (optional)" maxlength="60">
 </div>
@@ -1735,6 +1751,11 @@
   const snowStorageEl = document.getElementById('snow-storage');
   const snowSettingsEl = document.getElementById('snow-settings');
   const snowCountEl = document.getElementById('snow-count');
+  const fenceSection = document.getElementById('fence-section');
+  const fenceRunsEl = document.getElementById('fence-runs');
+  const fenceTotalEl = document.getElementById('fence-total');
+  const fenceSettingsEl = document.getElementById('fence-settings');
+  const fenceCountEl = document.getElementById('fence-count');
   const tapModeBtn = document.getElementById('tap-mode-btn');
   const mapHint = document.getElementById('map-hint');
   const mapEl = document.getElementById('yard-map');
@@ -3009,6 +3030,106 @@
     saveState();
   }
 
+  // renderFence owns #fence-section's visibility the same way renderSnow
+  // owns #snow-section's — renderAll() must never also touch display here,
+  // or the two owners fight and the panel flickers.
+  function renderFence() {
+    const runs = fenceRuns();
+    if (isSnow() || !runs.length) { fenceSection.style.display = 'none'; return; }
+    fenceSection.style.display = 'block';
+    fenceCountEl.textContent = `${runs.length} run${runs.length !== 1 ? 's' : ''}`;
+    renderFenceRuns(runs);
+    renderFenceTotal(runs);
+    renderFenceSettings();
+  }
+
+  function renderFenceRuns(runs) {
+    const spacing = parseFloat(state.fencePrefs.spacingFt);
+    if (!(spacing > 0)) {
+      fenceRunsEl.innerHTML = `<div class="empty-state">Set the post spacing below to get post and section counts</div>`;
+      return;
+    }
+    fenceRunsEl.innerHTML = runs.map(z => {
+      const c = fenceCounts(z);
+      const gates = (z.gates || []).map(g => `
+        <div class="layer-row1">
+          <span>Gate</span>
+          <input type="number" class="fence-gate-width" data-zone="${z.id}" data-gate="${g.id}"
+                 value="${escapeAttr(g.widthFt ?? '')}" placeholder="ft" min="0" step="0.5" inputmode="decimal">
+          <button class="chip-act fence-gate-remove" data-zone="${z.id}" data-gate="${g.id}" title="Remove gate">${icon('x','ic-sm')}</button>
+        </div>`).join('');
+      return `
+        <div class="layer-item" data-zone="${z.id}">
+          <div class="layer-row1"><strong>${escapeHtml(z.name)}</strong><span>${Math.round(c.runFt).toLocaleString()} ft</span></div>
+          <div class="layer-row1"><span>Sections</span><strong>${c.sections}</strong></div>
+          <div class="layer-row1"><span>Posts — ${c.terminal} end, ${c.corner} corner, ${c.line} line</span><strong>${c.posts}</strong></div>
+          ${gates}
+          ${c.gateCount ? `<div class="layer-row1"><span>Gate posts</span><strong>${c.gatePosts}</strong></div>
+          <div class="layer-row1"><span>Net fence</span><strong>${Math.round(c.netFenceFt).toLocaleString()} ft</strong></div>` : ''}
+          <button class="btn btn-secondary fence-add-gate" data-zone="${z.id}">+ Gate</button>
+        </div>`;
+    }).join('');
+  }
+
+  function renderFenceTotal(runs) {
+    const cs = runs.map(fenceCounts).filter(Boolean);
+    if (!cs.length) { fenceTotalEl.innerHTML = ''; return; }
+    const sum = k => cs.reduce((s, c) => s + c[k], 0);
+    const bags = cs.every(c => c.bags != null) ? sum('bags') : null;
+    fenceTotalEl.innerHTML =
+      `<strong>${sum('posts') + sum('gatePosts')} posts</strong> · ${sum('sections')} sections`
+      + `<br><span style="font-weight:400;">${sum('terminal')} end · ${sum('corner')} corner · ${sum('line')} line · ${sum('gatePosts')} gate</span>`
+      + `<br><span style="font-weight:400;">${Math.round(sum('netFenceFt')).toLocaleString()} ft of fence`
+      + (sum('gateCount') ? `, ${sum('gateCount')} gate${sum('gateCount') !== 1 ? 's' : ''} (${Math.round(sum('gateWidthFt')).toLocaleString()} ft)` : '')
+      + `</span>`
+      + (bags != null ? `<br><span style="font-weight:400;">Concrete: ${bags} bags</span>` : '');
+  }
+
+  function renderFenceSettings() {
+    const p = state.fencePrefs;
+    const num = (cls, val, ph, step) =>
+      `<input type="number" class="${cls}" value="${escapeAttr(val ?? '')}" placeholder="${escapeAttr(ph)}" min="0" step="${step}" inputmode="decimal">`;
+    fenceSettingsEl.innerHTML = `
+      <div class="layer-item">
+        <div class="layer-row1"><span>Post spacing (on centre)</span>${num('fence-spacingFt', p.spacingFt, 'ft', '0.5')}</div>
+        <div class="layer-row1"><span>Concrete per post</span>${num('fence-bagsPerPost', p.bagsPerPost, 'bags', '0.5')}</div>
+      </div>
+      <div class="empty-state">These are remembered for the next job once you set them.</div>`;
+  }
+
+  fenceSettingsEl.addEventListener('input', (e) => {
+    const cls = [...e.target.classList].find(c => c.startsWith('fence-'));
+    if (!cls) return;
+    const key = cls.slice(6);
+    if (!['spacingFt', 'bagsPerPost'].includes(key)) return;
+    state.fencePrefs[key] = e.target.value;
+    saveFencePrefs();
+    // Rebuild the run list — spacing changes every count — but never the
+    // settings inputs, which is where the caret is.
+    renderFenceRuns(fenceRuns());
+    renderFenceTotal(fenceRuns());
+  });
+
+  fenceRunsEl.addEventListener('input', (e) => {
+    if (!e.target.classList.contains('fence-gate-width')) return;
+    const z = state.zones.find(x => x.id === Number(e.target.dataset.zone));
+    const g = z && (z.gates || []).find(x => x.id === Number(e.target.dataset.gate));
+    if (!g) return;
+    g.widthFt = e.target.value;
+    saveState();
+    renderFenceTotal(fenceRuns());   // totals only — the caret is in the run list
+  });
+
+  fenceRunsEl.addEventListener('click', (e) => {
+    const add = e.target.closest('.fence-add-gate');
+    const rm = e.target.closest('.fence-gate-remove');
+    const z = state.zones.find(x => x.id === Number((add || rm || {}).dataset?.zone));
+    if (!z) return;
+    if (add) addGate(z);
+    else if (rm) removeGate(z, Number(rm.dataset.gate));
+    renderFence();
+  });
+
   // ── LIVE MAP (MapLibre + Alaska imagery) ─────────────
   // Real aerial imagery under the walked perimeter, so odd/notched shapes can
   // be checked against the actual property. The map is also an input: corners
@@ -4182,6 +4303,7 @@
     renderResult();
     renderLayers();
     renderSnow();
+    renderFence();
     updateMapShape(opts);
     updateButtons();
   }
