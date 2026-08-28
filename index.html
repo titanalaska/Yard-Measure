@@ -1614,10 +1614,14 @@
     <span class="section-title">Snow</span>
     <span class="pin-count" id="snow-count">0 zones</span>
   </div>
+  <!-- Settings sit ABOVE the numbers they produce. They were below, which meant
+       typing an event depth at the bottom of the panel changed a figure that had
+       already scrolled off the top of the phone — you entered a number and saw
+       nothing happen. Inputs first, then what they compute. -->
   <div id="snow-widths"></div>
+  <div id="snow-settings"></div>
   <div id="snow-totals"></div>
   <div id="snow-storage" class="layers-total"></div>
-  <div id="snow-settings"></div>
 </div>
 
 <div id="fence-section" style="display:none;">
@@ -1625,9 +1629,12 @@
     <span class="section-title">Fence</span>
     <span class="pin-count" id="fence-count">0 runs</span>
   </div>
+  <!-- Same ordering rule as the snow panel: post spacing drives every count
+       above it, so it goes first. With settings last, typing a spacing at the
+       bottom changed post counts that had already scrolled off the top. -->
+  <div id="fence-settings"></div>
   <div id="fence-runs"></div>
   <div id="fence-total" class="layers-total"></div>
-  <div id="fence-settings"></div>
 </div>
 
 <div id="snapshot-section">
@@ -2516,8 +2523,12 @@
       resultSqft.textContent = Math.round(ft).toLocaleString();
       const sigmaFt = runSigmaM(z.pins) * M_TO_FT;
       resultRange.innerHTML = `Range: <span>${Math.max(0, Math.round(ft - 2 * sigmaFt)).toLocaleString()}</span> – <span>${Math.round(ft + 2 * sigmaFt).toLocaleString()}</span> ft`;
+      // "yd" alone is dangerous here. Everywhere else in snow the app talks in
+      // CUBIC yards — volume, storage, truckloads — and this is LINEAR yards of
+      // sidewalk. Same abbreviation, different quantity, same screen. Spell it
+      // out rather than let someone carry the wrong number into a bid.
       resultExtra.innerHTML = [
-        `${(ft / 3).toFixed(1)} yd`,
+        `${(ft / 3).toFixed(1)} yd of run`,
         `${z.pins.length - 1} segment${z.pins.length - 1 !== 1 ? 's' : ''}`,
       ].join(' &nbsp;·&nbsp; ');
       resultWarning.style.display = 'none';
