@@ -811,7 +811,7 @@ In `exportSnapshot()`, after the existing materials block and gated the same way
   } finally {
     marked.forEach(z => { z.fence = true; });
   }
-  if (!state.zones.filter(z => z.fence).length !== !marked.length)
+  if (state.zones.filter(z => z.fence).length !== marked.length)
     throw new Error('fence flags were not restored');
   return 'PASS';
 })()
