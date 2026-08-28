@@ -3855,6 +3855,20 @@
     // carries material layers gets dead whitespace where those rows would
     // have been.
     if (!isSnow() && materialRows.length) H += 46 + materialRows.length * 42 + 60;
+    // Fence block height — mirrors the row-counting the drawing block below
+    // uses, gated on the same condition. This is the reservation the snow
+    // build skipped: the block still drew fine and the assertions still
+    // passed, but the canvas height had already been fixed before it ran, so
+    // the total-posts line and the footer both cropped silently off the
+    // bottom of the exported PNG. Row count: heading (40) + Sections + Posts
+    // + [Gates, Gate posts] + Net fence + [Concrete] (42 each) + total (44).
+    const fenceCsForH = !isSnow() ? fenceRuns().map(fenceCounts).filter(Boolean) : [];
+    if (fenceCsForH.length) {
+      const gateRows = fenceCsForH.reduce((s, c) => s + c.gateCount, 0) ? 2 : 0;
+      const bagsRow = fenceCsForH.every(c => c.bags != null) ? 1 : 0;
+      const fenceRows = 2 + gateRows + 1 + bagsRow;
+      H += 40 + fenceRows * 42 + 44;
+    }
     // Snow block height — mirrors the row-counting the sections above already
     // do, sized to the exact increments its drawing code below uses. Without
     // this the card's canvas height is fixed before the snow block ever
@@ -4163,6 +4177,48 @@
         cursorY += 44;
       }
       cursorY += 16;
+    }
+
+    // fence — posts and sections, the numbers a material list is built from
+    const fenceCs = !isSnow() ? fenceRuns().map(fenceCounts).filter(Boolean) : [];
+    if (fenceCs.length) {
+      const sum = k => fenceCs.reduce((s, c) => s + c[k], 0);
+      g.textAlign = 'left';
+      g.fillStyle = '#1a1a1a';
+      g.font = `700 30px ${F}`;
+      g.fillText('Fence', 40, cursorY);
+      cursorY += 40;
+
+      const rows = [
+        ['Sections', `${sum('sections')}`],
+        ['Posts — end / corner / line', `${sum('terminal')} / ${sum('corner')} / ${sum('line')}`],
+      ];
+      if (sum('gateCount')) {
+        rows.push(['Gates', `${sum('gateCount')} (${Math.round(sum('gateWidthFt')).toLocaleString()} ft)`]);
+        rows.push(['Gate posts', `${sum('gatePosts')}`]);
+      }
+      rows.push(['Net fence', `${Math.round(sum('netFenceFt')).toLocaleString()} ft`]);
+      if (fenceCs.every(c => c.bags != null)) rows.push(['Concrete', `${sum('bags')} bags`]);
+
+      rows.forEach(([label, val]) => {
+        g.fillStyle = '#555';
+        g.font = `400 26px ${F}`;
+        g.textAlign = 'left';
+        g.fillText(label, 40, cursorY);
+        g.fillStyle = '#2d6a2d';
+        g.font = `700 26px ${F}`;
+        g.textAlign = 'right';
+        g.fillText(val, W - 40, cursorY);
+        cursorY += 42;
+      });
+
+      g.textAlign = 'left';
+      g.fillStyle = '#2d6a2d';
+      g.font = `800 28px ${F}`;
+      g.fillText('Total posts', 40, cursorY + 6);
+      g.textAlign = 'right';
+      g.fillText(`${sum('posts') + sum('gatePosts')}`, W - 40, cursorY + 6);
+      cursorY += 44;
     }
 
     // snow — surfaces stay separate, because lot, sidewalk and stair work are
@@ -4577,6 +4633,43 @@
 
   // ── COPY TO CLIPBOARD ────────────────────────────────
   // For dropping straight into a bid without retyping numbers off a photo.
+  // One quantity + unit per line, so this maps onto estimate line items
+  // without retyping. Deliberately no cost codes and no prices.
+  function fenceSummaryLines() {
+    const runs = fenceRuns();
+    const cs = runs.map(fenceCounts).filter(Boolean);
+    if (!cs.length) return [];
+    const lines = ['', 'FENCE'];
+    const ft = v => Math.round(v).toLocaleString();
+
+    runs.forEach((z, i) => {
+      const c = cs[i];
+      if (!c) return;
+      lines.push(`${z.name}`);
+      lines.push(`   Run length          ${ft(c.runFt)} ft`);
+      if (c.gateCount) {
+        lines.push(`   Gates               ${c.gateCount} (${ft(c.gateWidthFt)} ft)`);
+        lines.push(`   Net fence           ${ft(c.netFenceFt)} ft`);
+      }
+      lines.push(`   Sections            ${c.sections} ea`);
+      lines.push(`   Terminal posts      ${c.terminal} ea`);
+      if (c.corner) lines.push(`   Corner posts        ${c.corner} ea`);
+      lines.push(`   Line posts          ${c.line} ea`);
+      if (c.gatePosts) lines.push(`   Gate posts          ${c.gatePosts} ea`);
+      lines.push(`   Total posts         ${c.posts + c.gatePosts} ea`);
+      if (c.bags != null) lines.push(`   Concrete            ${c.bags} bags`);
+    });
+
+    if (cs.length > 1) {
+      const sum = k => cs.reduce((s, c) => s + c[k], 0);
+      lines.push('');
+      lines.push(`FENCE TOTAL           ${sum('posts') + sum('gatePosts')} posts, ${sum('sections')} sections`);
+      lines.push(`   Net fence           ${ft(sum('netFenceFt'))} ft`);
+      if (cs.every(c => c.bags != null)) lines.push(`   Concrete            ${sum('bags')} bags`);
+    }
+    return lines;
+  }
+
   function jobSummaryText() {
     const lines = [jobTitle(), new Date().toLocaleString(), ''];
     state.zones.filter(isDrawn).forEach(z => {
@@ -4604,6 +4697,7 @@
     lines.push('');
     if (jobSqft()) lines.push(`TOTAL AREA: ${Math.round(jobSqft()).toLocaleString()} sq ft`);
     if (jobLinearFt()) lines.push(`TOTAL RUN: ${Math.round(jobLinearFt()).toLocaleString()} linear ft`);
+    lines.push(...fenceSummaryLines());
     return lines.join('\n');
   }
 
