@@ -153,10 +153,22 @@ against twenty-one 4x4s.
 
 ### Concrete
 
-    bags = posts × bagsPerPost
+    bags = ceil((posts + gatePosts) × bagsPerPost)   // ceil ONCE, at display
 
 Reported only when `bagsPerPost` is set. Hole depth in Alaska is driven by frost,
 which is why this is a user value and not a constant — see "Open questions".
+
+**Gate posts are included, and the rounding happens once.** An earlier draft of
+this spec said `posts × bagsPerPost`, omitting gate posts. That was wrong on the
+physical facts: a gate post is a hole in the ground and takes concrete like any
+other. Rounding is applied once at the point of display, never per run and then
+summed — a three-run job at half a bag per post would otherwise over-count by up
+to two bags purely from three separate ceilings.
+
+Note this does **not** conflict with the rule below about gate posts. Counting a
+gate post's *concrete* is a physical fact. Deciding whether that post also
+replaces a line post is a *framing judgment*, and the app still refuses to make
+it.
 
 ## Output
 
