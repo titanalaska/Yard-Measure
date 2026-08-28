@@ -876,6 +876,54 @@
     border-color: var(--green-light);
   }
 
+  /* Settings rows are a label and a number. These inputs had no width rule at
+     all, so they fell back to the browser's default number-input width and ate
+     half the row for a value nobody types more than three digits into — while
+     the label, which is the part that has to explain itself, got squeezed.
+     Number narrow and right-aligned, words wide. */
+  #snow-settings .layer-row1,
+  #fence-settings .layer-row1 {
+    align-items: flex-start;
+  }
+
+  #snow-settings .layer-row1 > span,
+  #fence-settings .layer-row1 > span {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.35;
+  }
+
+  /* The parenthetical becomes a proper sub-label on its own line rather than a
+     run-on inside the name. It is doing real work — it is where someone learns
+     what to put in the box — so it gets to be readable. */
+  #snow-settings .layer-row1 em,
+  #fence-settings .layer-row1 em {
+    display: block;
+    font-style: normal;
+    font-size: 12px;
+    opacity: 0.68;
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+
+  #snow-settings .layer-row1 input,
+  #fence-settings .layer-row1 input {
+    flex: 0 0 76px;
+    width: 76px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    text-align: right;
+  }
+
+  #snow-settings .layer-row1 input:focus,
+  #fence-settings .layer-row1 input:focus {
+    outline: none;
+    border-color: var(--green-light);
+  }
+
   .layer-unit {
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -1614,10 +1662,14 @@
     <span class="section-title">Snow</span>
     <span class="pin-count" id="snow-count">0 zones</span>
   </div>
+  <!-- Settings sit ABOVE the numbers they produce. They were below, which meant
+       typing an event depth at the bottom of the panel changed a figure that had
+       already scrolled off the top of the phone — you entered a number and saw
+       nothing happen. Inputs first, then what they compute. -->
   <div id="snow-widths"></div>
+  <div id="snow-settings"></div>
   <div id="snow-totals"></div>
   <div id="snow-storage" class="layers-total"></div>
-  <div id="snow-settings"></div>
 </div>
 
 <div id="fence-section" style="display:none;">
@@ -1625,9 +1677,12 @@
     <span class="section-title">Fence</span>
     <span class="pin-count" id="fence-count">0 runs</span>
   </div>
+  <!-- Same ordering rule as the snow panel: post spacing drives every count
+       above it, so it goes first. With settings last, typing a spacing at the
+       bottom changed post counts that had already scrolled off the top. -->
+  <div id="fence-settings"></div>
   <div id="fence-runs"></div>
   <div id="fence-total" class="layers-total"></div>
-  <div id="fence-settings"></div>
 </div>
 
 <div id="snapshot-section">
@@ -1711,13 +1766,18 @@
     snowPrefs: {
       pileHeightFt: 20,          // Titan's own working figure for a finished pile
       packingFactor: '',
-      compactionRatio: '',
       truckCapacityYd3: '',
       sandRateLbsPer1000: '',
     },
-    // The site and its contract.
+    // The site, its contract, and the storm being tested. Compaction lives
+    // here rather than with the fleet settings because it is NOT a property of
+    // how Titan works — it is a property of that snowfall. Cold dry powder is
+    // mostly air and shrinks enormously when pushed; wet spring snow is already
+    // dense and barely shrinks at all. One number carried across the season
+    // would silently apply a wet-snow ratio to a powder event.
     snowJob: {
       eventDepthIn: '',
+      compactionRatio: '',
       removalWindowHrs: '',
       triggerDepthIn: '',
     },
@@ -2516,8 +2576,12 @@
       resultSqft.textContent = Math.round(ft).toLocaleString();
       const sigmaFt = runSigmaM(z.pins) * M_TO_FT;
       resultRange.innerHTML = `Range: <span>${Math.max(0, Math.round(ft - 2 * sigmaFt)).toLocaleString()}</span> – <span>${Math.round(ft + 2 * sigmaFt).toLocaleString()}</span> ft`;
+      // "yd" alone is dangerous here. Everywhere else in snow the app talks in
+      // CUBIC yards — volume, storage, truckloads — and this is LINEAR yards of
+      // sidewalk. Same abbreviation, different quantity, same screen. Spell it
+      // out rather than let someone carry the wrong number into a bid.
       resultExtra.innerHTML = [
-        `${(ft / 3).toFixed(1)} yd`,
+        `${(ft / 3).toFixed(1)} yd of run`,
         `${z.pins.length - 1} segment${z.pins.length - 1 !== 1 ? 's' : ''}`,
       ].join(' &nbsp;·&nbsp; ');
       resultWarning.style.display = 'none';
@@ -2861,14 +2925,19 @@
     return (sqft * h * f) / 27;
   }
 
-  // compactionRatio is FRESH ÷ PILED. A ratio of 3 means three cubic feet of
+  // compactionRatio is FRESH ÷ PILED — how far the snow packs down, not a
+  // quantity. A ratio of 3 means it packs to a third of the depth that fell;
+  // 14 inches of powder becomes about 5 inches' worth of material. Phrasing it
+  // as "3 ft of fresh" confused a real user, because nobody pushes 3 ft of
+  // anything. It is a shrink factor and depth never enters into it.
+  // Historically this comment read: a ratio of 3 means three cubic feet of
   // fresh snow becomes one once plowed and piled. The inverse reading is
   // equally natural and wrong by a factor of nine, which is why the input
   // label spells the direction out.
   function snowVolumeYd3() {
     const sqft = clearedSqft();
     const depth = parseFloat(state.snowJob.eventDepthIn);
-    const ratio = parseFloat(state.snowPrefs.compactionRatio);
+    const ratio = parseFloat(state.snowJob.compactionRatio);
     if (!(sqft > 0) || !(depth > 0) || !(ratio > 0)) return null;
     return (sqft * (depth / 12)) / 27 / ratio;
   }
@@ -2962,10 +3031,57 @@
   function renderSnowStorage() {
     const vol = snowVolumeYd3();
     const cap = storageCapacityYd3();
-    const yd = v => v.toFixed(1);
+    // Separators matter here: a storage capacity runs to five figures, and it
+    // sits inches from a square footage that is already grouped. "19584.7"
+    // next to "48,072" reads as a different kind of number.
+    const yd = v => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const storageSqft = clearedBySurface().storage;
+
+    // What a storage zone holds is a fact about the SITE — footprint, pile
+    // height, pile shape. It has nothing to do with any particular storm, so
+    // it is reported as soon as it can be worked out. It used to be buried
+    // inside the fits/over comparison, which meant measuring a storage zone
+    // and entering a pile height showed nothing at all until an event depth
+    // and a compaction ratio were also filled in. Reported by a user who did
+    // exactly that and reasonably concluded it was broken.
+    let head = '';
+    if (cap != null) {
+      // Loads to empty a full pile. Titan no longer runs its own dump, so
+      // hauling the pile is a real, costed operation — "how many trips" is the
+      // question, not just "does it fit". Previously loads only appeared for
+      // the excess over capacity, so a site that fit reported no trips at all
+      // even with a truck capacity entered.
+      const emptyLoads = haulLoads(cap);
+      head = `<strong>Storage holds ${yd(cap)} yd³</strong>`
+        + (emptyLoads != null ? ` · ${emptyLoads.toLocaleString()} load${emptyLoads !== 1 ? 's' : ''} to empty` : '')
+        + `<br><span style="font-weight:400;">${Math.round(storageSqft).toLocaleString()} ft² at ${state.snowPrefs.pileHeightFt} ft, ${state.snowPrefs.packingFactor} packed`
+        + (emptyLoads == null ? ' · set a truck capacity for load counts' : '')
+        + `</span>`;
+    } else if (storageSqft > 0) {
+      // Name the field that is actually missing rather than a generic prompt.
+      const missing = !(parseFloat(state.snowPrefs.pileHeightFt) > 0)
+        ? 'a pile height' : 'a packing factor';
+      head = `<span style="font-weight:400;">${Math.round(storageSqft).toLocaleString()} ft² of storage — set ${missing} to see what it holds</span>`;
+    }
+
+    // Contract terms belong on screen, not only on the export. The callout
+    // trigger appeared NOWHERE in the app — you typed it and it vanished until
+    // you exported something, which reads as the field doing nothing at all.
+    // The removal window at least changed the headline, but only once a storm
+    // had been entered.
+    const trigIn = parseFloat(state.snowJob.triggerDepthIn);
+    const removalHrs = parseFloat(state.snowJob.removalWindowHrs);
+    const terms = [];
+    if (trigIn > 0) terms.push(`${trigIn}" callout`);
+    if (removalHrs > 0) terms.push(`remove within ${removalHrs} hr`);
+    const termsLine = terms.length
+      ? `<br><span style="font-weight:400;">Contract: ${terms.join(' · ')}</span>`
+      : '';
 
     if (vol == null) {
-      snowStorageEl.innerHTML = `<div class="empty-state">Set an event depth and a compaction ratio for a volume</div>`;
+      snowStorageEl.innerHTML = (head
+        ? `${head}<br><span style="font-weight:400;">Set an event depth and a compaction ratio to compare it against a storm</span>`
+        : `<div class="empty-state">Set an event depth and a compaction ratio for a volume</div>`) + termsLine;
       return;
     }
 
@@ -2975,24 +3091,33 @@
     let html;
 
     if (removal > 0) {
-      html = `<strong>${yd(vol)} yd³ to remove</strong>`
-        + (loads != null ? ` · ${loads} load${loads !== 1 ? 's' : ''}` : '')
-        + `<br><span style="font-weight:400;">Contract removal within ${removal} hr — it leaves whether or not it fits</span>`
-        + (cap != null ? `<br><span style="font-weight:400;">Can stage ${yd(cap)} yd³ on site while working through it</span>` : '');
+      // Keep the storage header here too. This is the case where hauling
+      // matters MOST — the snow leaves on a clock — so dropping "loads to
+      // empty" precisely here was backwards. The header already states the
+      // capacity, so the old "Can stage N yd³" line would just repeat it.
+      html = (head ? `${head}<br>` : '')
+        + `<strong>${yd(vol)} yd³ to remove</strong>`
+        + (loads != null ? ` · ${loads.toLocaleString()} load${loads !== 1 ? 's' : ''}` : '')
+        + `<br><span style="font-weight:400;">Contract removal within ${removal} hr — it leaves whether or not it fits`
+        + (cap != null ? `, and the storage above is what can be staged while you work through it` : '')
+        + `</span>`;
     } else if (cap == null) {
-      html = `<strong>${yd(vol)} yd³ of snow</strong><br><span style="font-weight:400;">Measure a storage zone and set a packing factor to check whether it fits</span>`;
+      html = `<strong>${yd(vol)} yd³ of snow</strong>`
+        + `<br><span style="font-weight:400;">${storageSqft > 0
+            ? 'Set a packing factor to check whether it fits'
+            : 'Measure a storage zone to check whether it fits'}</span>`;
     } else if (vol <= cap) {
-      html = `<strong>Fits</strong> — ${yd(vol)} yd³ into ${yd(cap)} yd³ of storage`;
+      html = `${head}<br><strong>Fits</strong> — ${yd(vol)} yd³ of snow into ${yd(cap)} yd³ of storage`;
     } else {
       const over = vol - cap;
       const overLoads = haulLoads(over);
-      html = `<strong>Over by ${yd(over)} yd³</strong>`
-        + (overLoads != null ? ` · ${overLoads} load${overLoads !== 1 ? 's' : ''}` : '')
-        + `<br><span style="font-weight:400;">${yd(vol)} yd³ of snow, ${yd(cap)} yd³ of storage</span>`;
+      html = `${head}<br><strong>Over by ${yd(over)} yd³</strong>`
+        + (overLoads != null ? ` · ${overLoads.toLocaleString()} load${overLoads !== 1 ? 's' : ''}` : '')
+        + `<br><span style="font-weight:400;">${yd(vol)} yd³ of snow against ${yd(cap)} yd³ of storage</span>`;
     }
 
     if (tons != null) html += `<br><span style="font-weight:400;">Ice control: ${tons.toFixed(2)} tons per application</span>`;
-    snowStorageEl.innerHTML = html;
+    snowStorageEl.innerHTML = html + termsLine;
   }
 
   function renderSnowSettings() {
@@ -3003,18 +3128,18 @@
     snowSettingsEl.innerHTML = `
       <div class="layer-item">
         <div class="layer-row1"><span>Event depth</span>${num('snow-eventDepthIn', j.eventDepthIn, 'in', '0.5')}</div>
+        <div class="layer-row1"><span>Compaction <em>how far it packs down — 3 means 12 in of snow packs to 4 in. Dry powder shrinks most, wet snow least</em></span>${num('snow-compactionRatio', j.compactionRatio, 'e.g. 3', '0.5')}</div>
         <div class="layer-row1"><span>Pile height (finished, ft)</span>${num('snow-pileHeightFt', p.pileHeightFt, 'ft', '1')}</div>
-        <div class="layer-row1"><span>Packing factor <em>(a pile is a wedge, not a box)</em></span>${num('snow-packingFactor', p.packingFactor, 'e.g. 0.5', '0.05')}</div>
-        <div class="layer-row1"><span>Compaction <em>(fresh ÷ piled — 3 means 3 ft³ fresh becomes 1 ft³ piled)</em></span>${num('snow-compactionRatio', p.compactionRatio, 'e.g. 3', '0.5')}</div>
+        <div class="layer-row1"><span>Packing factor <em>how much of the box the pile fills — flat-topped pile ≈ 0.55, cone ≈ 0.33, ridge ≈ 0.5</em></span>${num('snow-packingFactor', p.packingFactor, 'e.g. 0.55', '0.05')}</div>
         <div class="layer-row1"><span>Truck capacity</span>${num('snow-truckCapacityYd3', p.truckCapacityYd3, 'yd³', '1')}</div>
         <div class="layer-row1"><span>Ice control rate</span>${num('snow-sandRateLbsPer1000', p.sandRateLbsPer1000, 'lb per 1,000 ft²', '1')}</div>
-        <div class="layer-row1"><span>Removal window <em>(blank if the contract has none)</em></span>${num('snow-removalWindowHrs', j.removalWindowHrs, 'hr', '1')}</div>
+        <div class="layer-row1"><span>Removal window <em>blank if the contract has none</em></span>${num('snow-removalWindowHrs', j.removalWindowHrs, 'hr', '1')}</div>
         <div class="layer-row1"><span>Callout trigger</span>${num('snow-triggerDepthIn', j.triggerDepthIn, 'in', '0.5')}</div>
       </div>`;
   }
 
-  const SNOW_PREF_FIELDS = ['pileHeightFt', 'packingFactor', 'compactionRatio', 'truckCapacityYd3', 'sandRateLbsPer1000'];
-  const SNOW_JOB_FIELDS = ['eventDepthIn', 'removalWindowHrs', 'triggerDepthIn'];
+  const SNOW_PREF_FIELDS = ['pileHeightFt', 'packingFactor', 'truckCapacityYd3', 'sandRateLbsPer1000'];
+  const SNOW_JOB_FIELDS = ['eventDepthIn', 'compactionRatio', 'removalWindowHrs', 'triggerDepthIn'];
 
   snowSettingsEl.addEventListener('input', (e) => {
     const cls = [...e.target.classList].find(c => c.startsWith('snow-'));
@@ -4564,11 +4689,30 @@
     catch (e) { /* storage unavailable or full — not fatal */ }
   }
 
+  // Compaction used to live in the prefs, before it moved to the job — it
+  // belongs to the storm, not to the fleet. Stash any previously entered value
+  // here rather than writing it straight to snowJob: loadSnowPrefs() runs
+  // BEFORE loadState(), and loadState() assigns snowJob wholesale, so an early
+  // write is silently overwritten. Applied after loadState instead.
+  let legacyCompaction = null;
+
   function loadSnowPrefs() {
     try {
       const raw = localStorage.getItem(SNOW_PREFS_KEY);
-      if (raw) Object.assign(state.snowPrefs, JSON.parse(raw));
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.compactionRatio) legacyCompaction = saved.compactionRatio;
+      delete saved.compactionRatio;
+      Object.assign(state.snowPrefs, saved);
     } catch (e) { /* keep the defaults */ }
+  }
+
+  // Only fills a blank — a job that carries its own compaction keeps it.
+  function applyLegacyCompaction() {
+    if (legacyCompaction && !state.snowJob.compactionRatio) {
+      state.snowJob.compactionRatio = legacyCompaction;
+    }
+    legacyCompaction = null;
   }
 
   const FENCE_PREFS_KEY = 'yardMeasureFencePrefs';
@@ -5218,6 +5362,9 @@
   // left blank, and must land before the first renderAll() below or the
   // seeded terms won't appear in the inputs until something else re-renders.
   loadSnowTerms();
+  // Must follow loadState(): it assigns snowJob wholesale, so anything written
+  // to snowJob before it is discarded.
+  applyLegacyCompaction();
   // Work restored from before job history existed still needs an id, or it
   // could never be filed.
   if (!state.jobId) {
