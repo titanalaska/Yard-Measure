@@ -2127,9 +2127,14 @@
   clearBtn.addEventListener('click', () => {
     const z = activeZone();
     if (z.pins.length === 0 && z.layers.length === 0) return;
-    if (!confirm(`Clear all pins and layers in "${z.name}"?`)) return;
+    if (!confirm(`Clear all pins, layers, and gate openings in "${z.name}"?`)) return;
     z.pins = [];
     z.layers = [];
+    // Gates belong to a fence line. Clearing the line has to take them with
+    // it, or the zone keeps openings for a fence that is no longer there —
+    // still counted, still printed on the card.
+    z.gates = [];
+    z.nextGateId = 1;
     renderAll();
     saveState();
   });
@@ -2986,6 +2991,19 @@
   }
 
   const fenceRuns = () => state.zones.filter(isFence);
+
+  // A gate belongs to a run, not a job: a driveway gate on the street line and
+  // a walk gate on the side line are different openings on different fences.
+  function addGate(z) {
+    z.gates = z.gates || [];
+    z.gates.push({ id: z.nextGateId++, widthFt: '' });
+    saveState();
+  }
+
+  function removeGate(z, id) {
+    z.gates = (z.gates || []).filter(g => g.id !== id);
+    saveState();
+  }
 
   // ── LIVE MAP (MapLibre + Alaska imagery) ─────────────
   // Real aerial imagery under the walked perimeter, so odd/notched shapes can
