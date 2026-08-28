@@ -2983,10 +2983,34 @@
   function renderSnowStorage() {
     const vol = snowVolumeYd3();
     const cap = storageCapacityYd3();
-    const yd = v => v.toFixed(1);
+    // Separators matter here: a storage capacity runs to five figures, and it
+    // sits inches from a square footage that is already grouped. "19584.7"
+    // next to "48,072" reads as a different kind of number.
+    const yd = v => v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const storageSqft = clearedBySurface().storage;
+
+    // What a storage zone holds is a fact about the SITE — footprint, pile
+    // height, pile shape. It has nothing to do with any particular storm, so
+    // it is reported as soon as it can be worked out. It used to be buried
+    // inside the fits/over comparison, which meant measuring a storage zone
+    // and entering a pile height showed nothing at all until an event depth
+    // and a compaction ratio were also filled in. Reported by a user who did
+    // exactly that and reasonably concluded it was broken.
+    let head = '';
+    if (cap != null) {
+      head = `<strong>Storage holds ${yd(cap)} yd³</strong>`
+        + `<br><span style="font-weight:400;">${Math.round(storageSqft).toLocaleString()} ft² at ${state.snowPrefs.pileHeightFt} ft, ${state.snowPrefs.packingFactor} packed</span>`;
+    } else if (storageSqft > 0) {
+      // Name the field that is actually missing rather than a generic prompt.
+      const missing = !(parseFloat(state.snowPrefs.pileHeightFt) > 0)
+        ? 'a pile height' : 'a packing factor';
+      head = `<span style="font-weight:400;">${Math.round(storageSqft).toLocaleString()} ft² of storage — set ${missing} to see what it holds</span>`;
+    }
 
     if (vol == null) {
-      snowStorageEl.innerHTML = `<div class="empty-state">Set an event depth and a compaction ratio for a volume</div>`;
+      snowStorageEl.innerHTML = head
+        ? `${head}<br><span style="font-weight:400;">Set an event depth and a compaction ratio to compare it against a storm</span>`
+        : `<div class="empty-state">Set an event depth and a compaction ratio for a volume</div>`;
       return;
     }
 
@@ -2997,19 +3021,22 @@
 
     if (removal > 0) {
       html = `<strong>${yd(vol)} yd³ to remove</strong>`
-        + (loads != null ? ` · ${loads} load${loads !== 1 ? 's' : ''}` : '')
+        + (loads != null ? ` · ${loads.toLocaleString()} load${loads !== 1 ? 's' : ''}` : '')
         + `<br><span style="font-weight:400;">Contract removal within ${removal} hr — it leaves whether or not it fits</span>`
         + (cap != null ? `<br><span style="font-weight:400;">Can stage ${yd(cap)} yd³ on site while working through it</span>` : '');
     } else if (cap == null) {
-      html = `<strong>${yd(vol)} yd³ of snow</strong><br><span style="font-weight:400;">Measure a storage zone and set a packing factor to check whether it fits</span>`;
+      html = `<strong>${yd(vol)} yd³ of snow</strong>`
+        + `<br><span style="font-weight:400;">${storageSqft > 0
+            ? 'Set a packing factor to check whether it fits'
+            : 'Measure a storage zone to check whether it fits'}</span>`;
     } else if (vol <= cap) {
-      html = `<strong>Fits</strong> — ${yd(vol)} yd³ into ${yd(cap)} yd³ of storage`;
+      html = `${head}<br><strong>Fits</strong> — ${yd(vol)} yd³ of snow into ${yd(cap)} yd³ of storage`;
     } else {
       const over = vol - cap;
       const overLoads = haulLoads(over);
-      html = `<strong>Over by ${yd(over)} yd³</strong>`
-        + (overLoads != null ? ` · ${overLoads} load${overLoads !== 1 ? 's' : ''}` : '')
-        + `<br><span style="font-weight:400;">${yd(vol)} yd³ of snow, ${yd(cap)} yd³ of storage</span>`;
+      html = `${head}<br><strong>Over by ${yd(over)} yd³</strong>`
+        + (overLoads != null ? ` · ${overLoads.toLocaleString()} load${overLoads !== 1 ? 's' : ''}` : '')
+        + `<br><span style="font-weight:400;">${yd(vol)} yd³ of snow against ${yd(cap)} yd³ of storage</span>`;
     }
 
     if (tons != null) html += `<br><span style="font-weight:400;">Ice control: ${tons.toFixed(2)} tons per application</span>`;
