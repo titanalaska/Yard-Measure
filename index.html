@@ -1079,6 +1079,15 @@
     color: #2b2200;
   }
 
+  /* Unlocked is the LOUD state, deliberately. Pins being movable is the
+     exception, and it is exactly what turns a stray thumb during a pan into a
+     silently moved corner. The quiet default is the safe one. */
+  #pin-lock-btn.on {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+  }
+
   #map-tools, #map-tools-right {
     position: absolute;
     top: calc(var(--tap) + var(--s3) + var(--s2));
@@ -1418,6 +1427,7 @@
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
   <symbol id="i-tap" viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M12 11V9.5a1.5 1.5 0 0 1 3 0V12"/><path d="M15 12v-1a1.5 1.5 0 0 1 3 0v5a5 5 0 0 1-5 5h-1.6a5 5 0 0 1-3.9-1.9L5 15.5a1.6 1.6 0 0 1 2.4-2.1L9 15"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-pin-lock" viewBox="0 0 24 24"><path d="M12 21s-6-5.686-6-10a6 6 0 1 1 12 0c0 4.314-6 10-6 10z"/><rect x="9.5" y="9.3" width="5" height="4.2" rx="1"/><path d="M10.8 9.3V8.1a1.2 1.2 0 0 1 2.4 0v1.2"/></symbol>
   <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h18M3 15h18M9 3v18M15 3v18"/></symbol>
   <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
@@ -1528,6 +1538,9 @@
     </button>
     <button id="lock-btn" class="map-ctrl" type="button" title="Lock the map">
       <svg class="ic"><use href="#i-unlock" id="lock-icon"/></svg>
+    </button>
+    <button id="pin-lock-btn" class="map-ctrl" type="button" title="Pins locked — tap to move pins">
+      <svg class="ic"><use href="#i-pin-lock"/></svg>
     </button>
   </div>
 
@@ -1670,6 +1683,17 @@
     stale: false,
     tapMode: false,
     mapLocked: false,
+    // Pins are locked by default, and that default IS the feature. Corners get
+    // dragged only when reviewing a finished walk against the imagery — rare
+    // and deliberate. Panning and zooming to look at that walk is constant.
+    // Leaving the rare destructive gesture permanently armed in order to serve
+    // the constant one is backwards, so it stays off until asked for.
+    pinsLocked: true,
+    // What the last drag overwrote, so Undo can put it back. A drag rewrites
+    // position, accuracy and source AND deletes the GPS samples — restoring
+    // only the coordinates would leave a walked corner silently downgraded to
+    // a tapped one, with the snapshot's error range quietly changed to match.
+    lastMove: null,
     jobId: null,
     jobStarted: null,
     theme: 'auto',
@@ -1762,6 +1786,7 @@
   const mapEl = document.getElementById('yard-map');
   const parcelBtn = document.getElementById('parcel-btn');
   const lockBtn = document.getElementById('lock-btn');
+  const pinLockBtn = document.getElementById('pin-lock-btn');
   const fullBtn = document.getElementById('full-btn');
   const fitBtn = document.getElementById('fit-btn');
   const crosshairBtn = document.getElementById('crosshair-btn');
@@ -2000,6 +2025,12 @@
     if (act === 'delete') {
       if (!confirm(`Delete "${zone.name}" and its pins?`)) return;
       state.zones = state.zones.filter(z => z.id !== zone.id);
+      // Deleting the zone takes its pending move with it. Nothing can misfire
+      // today — zone ids are never reused within a job and lastMove is not
+      // persisted — but that is an invariant held up by two facts far from
+      // here, and this file has twice been bitten by exactly that kind of
+      // reasoning. Cheaper to not depend on it.
+      clearLastMoveFor(zone);
       ensureZone();
       renderAll({ fit: true });
       saveState();
@@ -2110,6 +2141,9 @@
     pin.id = state.nextPinId++;
     if (opts && Number.isInteger(opts.index)) z.pins.splice(opts.index, 0, pin);
     else z.pins.push(pin);
+    // Placing a pin makes any stashed move no longer the last thing that
+    // happened, so Undo must not reach back past it.
+    clearLastMoveFor(z);
     renderAll({ fit: !!(opts && opts.fit) });
     saveState();
   }
@@ -2137,10 +2171,37 @@
   // Pin ids increment monotonically, so the highest id is always the newest.
   undoBtn.addEventListener('click', () => {
     const z = activeZone();
+
+    // Undo means "undo the last thing", and since pins became movable the last
+    // thing can be a move as well as a placement. A move is restored in full —
+    // position, accuracy, source and samples — because the drag overwrote all
+    // of them, and putting back only the coordinates would leave the corner
+    // reading as map-placed with its GPS averaging gone.
+    const lm = state.lastMove;
+    if (lm && lm.zoneId === z.id) {
+      const p = z.pins.find(x => x.id === lm.pinId);
+      state.lastMove = null;
+      if (p) {
+        p.lat = lm.prev.lat;
+        p.lng = lm.prev.lng;
+        p.accuracy = lm.prev.accuracy;
+        p.src = lm.prev.src;
+        // samples is absent on a map-placed pin, so restore by deleting rather
+        // than assigning undefined — an undefined key is not the same shape.
+        if (lm.prev.samples === undefined) delete p.samples;
+        else p.samples = lm.prev.samples;
+        renderAll();
+        saveState();
+        showToast('Pin move undone');
+        return;
+      }
+    }
+
     if (!z.pins.length) return;
     let newest = 0;
     z.pins.forEach((p, i) => { if (p.id > z.pins[newest].id) newest = i; });
     z.pins.splice(newest, 1);
+    clearLastMoveFor(z);
     renderAll();
     saveState();
     showToast('Last pin removed');
@@ -2166,6 +2227,7 @@
     // still counted, still printed on the card.
     z.gates = [];
     z.nextGateId = 1;
+    clearLastMoveFor(z);
     renderAll();
     saveState();
   });
@@ -2197,6 +2259,11 @@
       return;
     } else if (act === 'remove') {
       z.pins.splice(i, 1);
+      // Deleting a pin makes the delete the last thing that happened, so a
+      // stashed drag must not survive it. Without this, deleting one pin and
+      // then tapping Undo silently replays an older move on a DIFFERENT pin —
+      // the corner you never touched jumps back.
+      clearLastMoveFor(z);
     } else {
       return;
     }
@@ -3545,9 +3612,42 @@
 
   lockBtn.addEventListener('click', () => {
     setMapLocked(!state.mapLocked);
+    // This used to read "drag pins without the map sliding" — written before
+    // pins could be locked, and actively misleading now: with pins locked,
+    // which is the default, locking the map drags nothing.
     showToast(state.mapLocked
-      ? 'Map locked — drag pins without the map sliding'
+      ? 'Map locked — it will not pan or zoom'
       : 'Map unlocked');
+  });
+
+  // ── PIN LOCK ─────────────────────────────────────────
+  // The accident this exists to stop: pins all placed, you go to pan or zoom to
+  // check the shape against the imagery, and your finger lands on a marker
+  // instead of the map. The marker wins the gesture, the corner moves, and
+  // nothing says so — the drag also rewrites that pin's accuracy and throws
+  // away its GPS samples, so a walked corner quietly becomes a tapped one.
+  // Only this zone's stash goes. A pending move in another zone is still the
+  // last thing that happened THERE, and discarding it because the user tidied
+  // up somewhere else throws away a legitimate undo they can never get back.
+  function clearLastMoveFor(z) {
+    if (state.lastMove && state.lastMove.zoneId === z.id) state.lastMove = null;
+  }
+
+  function setPinsLocked(on) {
+    state.pinsLocked = on;
+    pinLockBtn.classList.toggle('on', !on);   // loud when pins CAN move
+    pinLockBtn.title = on
+      ? 'Pins locked — tap to move pins'
+      : 'Pins movable — tap to lock';
+    pinMarkers.forEach(m => m.setDraggable(!on));
+    saveState();
+  }
+
+  pinLockBtn.addEventListener('click', () => {
+    setPinsLocked(!state.pinsLocked);
+    showToast(state.pinsLocked
+      ? 'Pins locked'
+      : 'Pins can be dragged — lock them again when you are done');
   });
 
   // Swapping imagery replaces the whole style, which discards our shape layers
@@ -3581,7 +3681,7 @@
       const el = document.createElement('div');
       el.className = 'map-pin-marker' + (i === 0 ? ' first' : '');
       el.textContent = i + 1;
-      const marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true })
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: !state.pinsLocked })
         .setLngLat([p.lng, p.lat])
         .addTo(map);
       // Belt and braces alongside the lock: once a drag on a pin has started,
@@ -3590,6 +3690,12 @@
       marker.on('dragend', () => {
         if (map.dragPan && !state.mapLocked) map.dragPan.enable();
         const ll = marker.getLngLat();
+        // Stash everything this drag is about to overwrite, before it does.
+        state.lastMove = {
+          zoneId: z.id,
+          pinId: p.id,
+          prev: { lat: p.lat, lng: p.lng, accuracy: p.accuracy, src: p.src, samples: p.samples },
+        };
         p.lat = ll.lat;
         p.lng = ll.lng;
         // A dragged corner is now a map-placed corner, with map precision.
@@ -4518,6 +4624,7 @@
         nextPinId: state.nextPinId,
         jobLabel: jobLabelInput.value,
         mapLocked: state.mapLocked,
+        pinsLocked: state.pinsLocked,
         jobId: state.jobId,
         jobStarted: state.jobStarted,
         theme: state.theme,
@@ -4580,6 +4687,9 @@
 
     if (saved.jobLabel) jobLabelInput.value = saved.jobLabel;
     if (saved.mapLocked) state.mapLocked = true;
+    // Absent on anything saved before pins could be locked, and those default
+    // to locked like everything else — the safe direction to be wrong in.
+    if (saved.pinsLocked === false) state.pinsLocked = false;
     state.jobId = saved.jobId || null;
     state.jobStarted = saved.jobStarted || null;
     if (saved.theme) state.theme = saved.theme;
@@ -4941,6 +5051,10 @@
     state.activeZoneId = null;
     state.nextZoneId = 1;
     state.nextPinId = 1;
+    // A new job is a fresh walk, and a walk never needs to drag a corner — so
+    // it starts protected regardless of how the previous job was left.
+    setPinsLocked(true);
+    state.lastMove = null;
     jobLabelInput.value = seed && seed.name ? seed.name : '';
     if (seed && seed.zones) {
       state.zones = JSON.parse(JSON.stringify(seed.zones));
@@ -4997,6 +5111,13 @@
       state.zones.reduce((m, z) => Math.max(m, ...z.pins.map(p => p.id || 0)), 0) + 1;
     state.activeZoneId = state.zones.length ? state.zones[0].id : null;
     jobLabelInput.value = /^Untitled — /.test(job.name) ? '' : job.name;
+    // A different job is a fresh walk, and a walk never needs to drag a corner.
+    // Without this, one unlock leaks into every job opened afterwards and the
+    // protection is gone without anyone noticing. Set before the render, the
+    // same way startNewJob() does — the two were asymmetric, which is fragile
+    // if either ever gains an await.
+    setPinsLocked(true);
+    state.lastMove = null;
     ensureZone();
     renderAll({ fit: true });
     saveState();
@@ -5105,6 +5226,9 @@
   }
   applyTheme();
   syncSeasonBtn();
+  // Sync the button to whatever was restored, or the toggle silently disagrees
+  // with the markers — the same class of bug the season button had.
+  setPinsLocked(state.pinsLocked);
   resultArea.setAttribute('aria-expanded', String(!!state.resultOpen));
   setCrosshair(!!state.crosshair);
   syncBarHeights();
