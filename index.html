@@ -3056,7 +3056,7 @@
           <span>Gate</span>
           <input type="number" class="fence-gate-width" data-zone="${z.id}" data-gate="${g.id}"
                  value="${escapeAttr(g.widthFt ?? '')}" placeholder="ft" min="0" step="0.5" inputmode="decimal">
-          <button class="chip-act fence-gate-remove" data-zone="${z.id}" data-gate="${g.id}" title="Remove gate">${icon('x','ic-sm')}</button>
+          <button class="remove-btn fence-gate-remove" data-zone="${z.id}" data-gate="${g.id}" title="Remove gate">${icon('x','ic-sm')}</button>
         </div>`).join('');
       return `
         <div class="layer-item" data-zone="${z.id}">
