@@ -279,8 +279,9 @@
      persist after the finger lifts, unlike the shared :active flash above. */
   .hdr-btn.active { background: rgba(255,255,255,0.32); border-color: rgba(255,255,255,0.75); }
 
-  /* JOBS SHEET */
-  #jobs-overlay {
+  /* JOBS SHEET - the site library sheet is the same object with a different
+     list in it, so it shares every rule rather than duplicating them. */
+  #jobs-overlay, #sites-overlay {
     display: none;
     position: fixed;
     inset: 0;
@@ -290,9 +291,9 @@
     justify-content: center;
   }
 
-  #jobs-overlay.open { display: flex; }
+  #jobs-overlay.open, #sites-overlay.open { display: flex; }
 
-  #jobs-sheet {
+  #jobs-sheet, #sites-sheet {
     background: var(--light);
     width: 100%;
     max-width: 560px;
@@ -402,6 +403,65 @@
   }
 
   .job-act:active { background: var(--surface-2); color: var(--text); }
+
+  /* The site line above the job name. Reads as a chip when linked and as a
+     quiet invitation when not, because most jobs will start unlinked. */
+  #site-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--mid);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #site-row.linked { color: var(--green); border-color: var(--green); }
+  #site-row:active { background: var(--surface-2); }
+  #site-row .site-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .site-form { display: grid; gap: 8px; margin: 10px 0; }
+
+  .site-form input, .site-form textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--dark);
+    background: var(--surface);
+  }
+
+  .site-form input:focus, .site-form textarea:focus {
+    outline: none;
+    border-color: var(--green-light);
+  }
+
+  .site-form textarea { min-height: 56px; resize: vertical; }
+
+  #site-search {
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--dark);
+    background: var(--surface);
+  }
+
+  #site-search:focus { outline: none; border-color: var(--green-light); }
 
   /* STATUS BAR */
   /* Read at arm's length, outdoors, in sun — so the accuracy figure is the
@@ -1541,11 +1601,48 @@
     <button class="btn btn-secondary" id="new-job-btn" type="button">
       <svg class="ic"><use href="#i-plus"/></svg> Start a new job
     </button>
+    <button class="btn btn-secondary" id="sites-open-btn" type="button" style="margin-top:8px;">
+      <svg class="ic"><use href="#i-jobs"/></svg> Site library
+    </button>
     <button class="btn btn-secondary" id="install-btn" type="button" style="display:none;margin-top:8px;">
       <svg class="ic"><use href="#i-install"/></svg> Add to home screen
     </button>
     <div id="jobs-list"></div>
     <p class="sheet-note" id="offline-note">Every job saves itself as you measure. Tap one to reopen it.</p>
+  </div>
+</div>
+
+<div id="sites-overlay">
+  <div id="sites-sheet">
+    <div class="sheet-head">
+      <span class="sheet-title">Site library</span>
+      <button class="sheet-close" id="sites-close" type="button" title="Close"><svg class="ic ic-lg"><use href="#i-x"/></svg></button>
+    </div>
+    <input type="text" id="site-search" placeholder="Search label, address, customer or group">
+    <button class="btn btn-secondary" id="site-add-btn" type="button">
+      <svg class="ic"><use href="#i-plus"/></svg> Add a site
+    </button>
+    <div id="site-form-wrap" style="display:none;">
+      <div class="site-form">
+        <input type="text" id="site-f-label" placeholder="Label - what the crew calls it" maxlength="80">
+        <input type="text" id="site-f-address" placeholder="Address" maxlength="120">
+        <input type="text" id="site-f-customer" placeholder="Customer (optional)" maxlength="80">
+        <input type="text" id="site-f-group" placeholder="Group (optional) - route, crew, city" maxlength="60">
+        <textarea id="site-f-note" placeholder="Note (optional)" maxlength="400"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="site-cancel-btn" type="button">Cancel</button>
+        <button class="btn btn-primary" id="site-save-btn" type="button">Save site</button>
+      </div>
+    </div>
+    <div id="sites-list"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="btn btn-secondary" id="site-export-btn" type="button">Export library</button>
+      <button class="btn btn-secondary" id="site-import-btn" type="button">Import</button>
+    </div>
+    <button class="btn btn-secondary" id="site-export-csv-btn" type="button" style="margin-top:8px;">Export CSV (spreadsheet)</button>
+    <input type="file" id="site-import-file" accept="application/json,.json" style="display:none;">
+    <p class="sheet-note">Sites stay on this phone. Export the library to move it to another one.</p>
   </div>
 </div>
 
@@ -1710,6 +1807,12 @@
 </div>
 
 <div id="snapshot-section">
+  <!-- Sits above the name because the site is the durable identity and the
+       name is only the human label for it - picking a site fills the name in. -->
+  <button id="site-row" type="button">
+    <svg class="ic"><use href="#i-jobs"/></svg>
+    <span class="site-row-text" id="site-row-text">Link a site</span>
+  </button>
   <input type="text" id="job-label" placeholder="Job name or address (optional)" maxlength="60">
 </div>
 
@@ -5554,10 +5657,6 @@
     };
   }
 
-  // Replaced by the real renderer when the sheet lands. Declared here so this
-  // step stands alone and setJobSite can be exercised before the UI exists.
-  function renderSiteRow() {}
-
   // The job keeps its free-text name; siteId sits beside it. Nothing that
   // reads job.name has to change, and a job saved before this feature loads
   // with siteId null and behaves exactly as it did.
@@ -5583,6 +5682,177 @@
     if (!c) return;
     upsertSite({ ...site, lat: c.lat, lng: c.lng });
   }
+
+  // ── SITE LIBRARY UI ──────────────────────────────────
+  const sitesOverlay = document.getElementById('sites-overlay');
+  const siteSearchInput = document.getElementById('site-search');
+  const siteFormWrap = document.getElementById('site-form-wrap');
+  // Which site the open form is editing; null means the form is creating one.
+  let editingSiteId = null;
+
+  function renderSiteRow() {
+    const row = document.getElementById('site-row');
+    const text = document.getElementById('site-row-text');
+    if (!row || !text) return;
+    const site = getSite(state.siteId);
+    row.classList.toggle('linked', !!site);
+    text.textContent = site ? siteJobName(site) : 'Link a site';
+  }
+
+  // Every typed word has to appear somewhere in the record, so "knik corners"
+  // and "corners knik" find the same row — nobody remembers field order.
+  function siteMatches(s, q) {
+    if (!q) return true;
+    const hay = [s.label, s.address, s.customer, s.group, s.note].join(' ').toLowerCase();
+    return q.toLowerCase().split(/\s+/).filter(Boolean).every(t => hay.includes(t));
+  }
+
+  function renderSites() {
+    const list = document.getElementById('sites-list');
+    const q = siteSearchInput.value.trim();
+    const all = readSites();
+    if (!all.length) {
+      list.innerHTML = '<div class="empty-state">No sites yet — add one, or measure a job and link it</div>';
+      return;
+    }
+    // Grouped first, ungrouped last. Done with an explicit test rather than a
+    // '~' sentinel: localeCompare sorts symbols BEFORE letters, so the
+    // sentinel sank the grouped sites instead of the ungrouped ones.
+    const shown = all.filter(s => siteMatches(s, q))
+      .sort((a, b) => {
+        const ag = a.group || '', bg = b.group || '';
+        if (!ag !== !bg) return ag ? -1 : 1;
+        return ag.localeCompare(bg) || (a.label || '').localeCompare(b.label || '');
+      });
+    if (!shown.length) {
+      list.innerHTML = `<div class="empty-state">Nothing matches “${escapeHtml(q)}”</div>`;
+      return;
+    }
+    list.innerHTML = shown.map(s => {
+      const bits = [];
+      if (s.address) bits.push(escapeHtml(s.address));
+      if (s.customer) bits.push(escapeHtml(s.customer));
+      if (s.group) bits.push(`<span class="job-badge">${escapeHtml(s.group)}</span>`);
+      return `<div class="job-row ${s.id === state.siteId ? 'current' : ''}">
+        <button class="job-open" data-site-pick="${s.id}">
+          <div class="job-name">${escapeHtml(s.label || '(no label)')}${s.id === state.siteId ? ' · this job' : ''}</div>
+          <div class="job-meta">${bits.join(' · ') || 'No address'}</div>
+        </button>
+        <button class="job-act" data-site-edit="${s.id}" title="Edit">${icon('edit')}</button>
+        <button class="job-act" data-site-del="${s.id}" title="Delete">${icon('trash')}</button>
+      </div>`;
+    }).join('');
+  }
+
+  function openSiteForm(site) {
+    editingSiteId = site ? site.id : null;
+    document.getElementById('site-f-label').value = site ? site.label : '';
+    document.getElementById('site-f-address').value = site ? site.address : '';
+    document.getElementById('site-f-customer').value = site ? site.customer : '';
+    document.getElementById('site-f-group').value = site ? site.group : '';
+    document.getElementById('site-f-note').value = site ? site.note : '';
+    siteFormWrap.style.display = '';
+    document.getElementById('site-f-label').focus();
+  }
+
+  function closeSiteForm() {
+    editingSiteId = null;
+    siteFormWrap.style.display = 'none';
+  }
+
+  function openSites() {
+    closeSiteForm();
+    siteSearchInput.value = '';
+    renderSites();
+    sitesOverlay.classList.add('open');
+  }
+
+  function closeSites() {
+    sitesOverlay.classList.remove('open');
+  }
+
+  // Picking a site on a job that has already been measured would silently
+  // re-label someone's work, so an in-progress job is linked in place and only
+  // an empty one starts fresh.
+  function startJobAtSite(siteId) {
+    const site = getSite(siteId);
+    if (!site) return;
+    if (state.zones.some(isDrawn)) {
+      setJobSite(site.id);
+      showToast(`Linked to ${site.label || 'site'}`);
+    } else {
+      syncCurrentJob();
+      startNewJob({ name: siteJobName(site), siteId: site.id });
+      showToast(`Started at ${site.label || 'site'}`);
+    }
+    closeSites();
+    closeJobs();
+  }
+
+  document.getElementById('site-row').addEventListener('click', openSites);
+  document.getElementById('sites-open-btn').addEventListener('click', openSites);
+  document.getElementById('sites-close').addEventListener('click', closeSites);
+  sitesOverlay.addEventListener('click', (e) => { if (e.target.id === 'sites-overlay') closeSites(); });
+  siteSearchInput.addEventListener('input', renderSites);
+  document.getElementById('site-add-btn').addEventListener('click', () => openSiteForm(null));
+  document.getElementById('site-cancel-btn').addEventListener('click', closeSiteForm);
+
+  document.getElementById('site-save-btn').addEventListener('click', () => {
+    const label = document.getElementById('site-f-label').value.trim();
+    const address = document.getElementById('site-f-address').value.trim();
+    if (!label && !address) { showToast('A site needs a label or an address'); return; }
+    const fields = {
+      label, address,
+      customer: document.getElementById('site-f-customer').value.trim(),
+      group: document.getElementById('site-f-group').value.trim(),
+      note: document.getElementById('site-f-note').value.trim(),
+    };
+    // Offer, never merge. A typed address that already exists is far more
+    // often the crew arriving at a known lot than a genuinely new one — but
+    // only a human can say which, and two lots on one street are common.
+    if (!editingSiteId) {
+      const hit = findSiteByAddress(address);
+      if (hit) {
+        const useExisting = confirm(
+          `${hit.label || 'A site'} is already saved at ${hit.address}.\n\n` +
+          `OK to use that one. Cancel to save this as a separate site.`);
+        if (useExisting) {
+          closeSiteForm();
+          startJobAtSite(hit.id);
+          return;
+        }
+        // Cancel means "these really are different lots" — fall through and
+        // save a second record rather than folding them together.
+      }
+    }
+    const wasEditing = !!editingSiteId;
+    const saved = wasEditing
+      ? upsertSite({ ...getSite(editingSiteId), ...fields })
+      : upsertSite(makeSite(fields));
+    closeSiteForm();
+    renderSites();
+    renderSiteRow();
+    showToast(wasEditing ? 'Site updated' : `Saved ${saved.label || 'site'}`);
+  });
+
+  document.getElementById('sites-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-site-pick], button[data-site-edit], button[data-site-del]');
+    if (!btn) return;
+    if (btn.dataset.sitePick) { startJobAtSite(btn.dataset.sitePick); return; }
+    if (btn.dataset.siteEdit) { openSiteForm(getSite(btn.dataset.siteEdit)); return; }
+    if (btn.dataset.siteDel) {
+      const site = getSite(btn.dataset.siteDel);
+      if (!site) return;
+      if (!confirm(`Delete "${site.label || site.address}"? Jobs measured here keep their measurements but lose the link.`)) return;
+      deleteSite(site.id);
+      // Deleting the site you are standing in leaves the measurements alone
+      // and only drops the link.
+      if (state.siteId === site.id) { state.siteId = null; saveState(); }
+      renderSites();
+      renderSiteRow();
+      showToast('Site deleted');
+    }
+  });
 
   // ── JOB HISTORY ──────────────────────────────────────
   // The app used to hold exactly one job: measuring the next property
@@ -5826,6 +6096,8 @@
   // won't appear in the inputs until something else forces a re-render.
   loadFencePrefs();
   const restored = loadState();
+  // Must follow loadState(): the row reads state.siteId, which it restores.
+  renderSiteRow();
   // Must run after loadState(): stickiness only seeds fields the restored job
   // left blank, and must land before the first renderAll() below or the
   // seeded terms won't appear in the inputs until something else re-renders.
