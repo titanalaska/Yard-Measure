@@ -5517,7 +5517,8 @@
   // Nothing on the job path may write this key.
   //
   // The library ships EMPTY. A company's own sites arrive as an import, never
-  // as a constant in here — see docs/site-seed-README.md.
+  // as a constant in here. A company's own list is an import file, and the
+  // repo's docs folder explains where one comes from.
   const SITES_KEY = 'yardMeasureSites';
 
   function readSites() {
@@ -5719,8 +5720,9 @@ Start this job at that site?`)) return false;
     text.textContent = site ? siteJobName(site) : 'Link a site';
   }
 
-  // Every typed word has to appear somewhere in the record, so "knik corners"
-  // and "corners knik" find the same row — nobody remembers field order.
+  // Every typed word has to appear somewhere in the record, so a two-word
+  // search finds the row whichever order it is typed — nobody remembers
+  // which half of a site name came first.
   function siteMatches(s, q) {
     if (!q) return true;
     const hay = [s.label, s.address, s.customer, s.group, s.note].join(' ').toLowerCase();
