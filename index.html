@@ -5874,6 +5874,209 @@ Start this job at that site?`)) return false;
     }
   });
 
+  // ── EXPORT / IMPORT ──────────────────────────────────
+  // One mechanism doing three jobs: loading a company's own site list once per
+  // device, moving a library between phones, and handing the data to whoever
+  // asked for it. JSON is the only format that round-trips.
+  const LIBRARY_FORMAT = 'yard-measure-library-1';
+  const APP_VERSION = 'v8';
+
+  function buildLibraryExport(opts) {
+    const o = opts || {};
+    return {
+      format: LIBRARY_FORMAT,
+      appVersion: APP_VERSION,
+      exportedAt: new Date().toISOString(),
+      sites: readSites(),
+      // Jobs carry every pin, so they are opt-in — a library moving between
+      // phones is a few kilobytes and a job history is not.
+      jobs: o.jobs ? readJobs() : [],
+    };
+  }
+
+  // Additive by contract. A site whose id already exists is OFFERED, not
+  // overwritten, because a stale file must never quietly undo a season of
+  // corrections. autoAnswer exists so the console assertions can drive both
+  // branches without a human at the keyboard.
+  function mergeImport(payload, opts) {
+    const o = opts || {};
+    if (!payload || payload.format !== LIBRARY_FORMAT) {
+      throw new Error('That file is not a Yard Measure library export');
+    }
+    const incoming = Array.isArray(payload.sites) ? payload.sites : [];
+    const sites = readSites();
+    const byId = new Map(sites.map(s => [s.id, s]));
+    let added = 0, updated = 0, skipped = 0;
+
+    incoming.forEach(raw => {
+      const site = makeSite(raw);
+      const existing = byId.get(site.id);
+      if (!existing) {
+        sites.unshift(site);
+        byId.set(site.id, site);
+        added++;
+        return;
+      }
+      // Same id, same content is a no-op — this is what makes importing the
+      // same file twice produce 74 sites and not 148.
+      const same = ['label', 'address', 'customer', 'group', 'note']
+        .every(k => existing[k] === site[k]);
+      if (same) return;
+      const answer = o.autoAnswer || (confirm(
+        `"${existing.label || existing.address}" is already saved and the file differs:\n\n` +
+        `  saved:  ${existing.label} · ${existing.address} · ${existing.group || 'no group'}\n` +
+        `  file:   ${site.label} · ${site.address} · ${site.group || 'no group'}\n\n` +
+        `OK to use the file's version. Cancel to keep what is saved.`
+      ) ? 'replace' : 'skip');
+      if (answer === 'replace') {
+        const i = sites.findIndex(s => s.id === site.id);
+        // createdAt belongs to this phone's record, not the file's — the site
+        // has been here since it was first saved here.
+        sites[i] = { ...existing, ...site, createdAt: existing.createdAt, updatedAt: Date.now() };
+        byId.set(site.id, sites[i]);
+        updated++;
+      } else {
+        skipped++;
+      }
+    });
+
+    writeSites(sites);
+
+    // Jobs are additive too, and never replace one already on this phone —
+    // the local copy is the one someone may be standing in.
+    let jobs = 0;
+    if (Array.isArray(payload.jobs) && payload.jobs.length) {
+      const current = readJobs();
+      const have = new Set(current.map(j => j.id));
+      const fresh = payload.jobs.filter(j => j && j.id && !have.has(j.id));
+      jobs = fresh.length;
+      if (jobs) writeJobs(current.concat(fresh).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)));
+    }
+    return { added, updated, skipped, jobs };
+  }
+
+  function downloadText(filename, text, mime) {
+    const blob = new Blob([text], { type: mime || 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // Flat, one row per zone, with site identity repeated on every row so a
+  // spreadsheet can pivot on it. EXPORT ONLY — a CSV cannot carry pin
+  // geometry, and importing one would silently produce sites with no shape.
+  function csvCell(v) {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  const CSV_HEADER = [
+    'site_id', 'site_label', 'site_address', 'site_customer', 'site_group',
+    'site_lat', 'site_lng',
+    'job_id', 'job_name', 'measured_at', 'season',
+    'zone_name', 'zone_mode', 'zone_surface', 'zone_sqft', 'zone_net_sqft',
+    'zone_linear_ft', 'pin_count',
+  ];
+
+  function buildLibraryCsv() {
+    const rows = [CSV_HEADER.join(',')];
+    const jobsBySite = new Map();
+    readJobs().forEach(j => {
+      const k = j.siteId || '';
+      if (!jobsBySite.has(k)) jobsBySite.set(k, []);
+      jobsBySite.get(k).push(j);
+    });
+
+    const emit = (site, job) => {
+      const base = [
+        site ? site.id : '', site ? site.label : '', site ? site.address : '',
+        site ? site.customer : '', site ? site.group : '',
+        site && typeof site.lat === 'number' ? site.lat.toFixed(6) : '',
+        site && typeof site.lng === 'number' ? site.lng.toFixed(6) : '',
+      ];
+      const blankJob = ['', '', '', ''];
+      const blankZone = ['', '', '', '', '', '', ''];
+      if (!job) { rows.push(base.concat(blankJob, blankZone).map(csvCell).join(',')); return; }
+      const jobBits = [job.id, job.name, new Date(job.savedAt).toISOString(), job.season || 'summer'];
+      const zones = (job.zones || []).filter(z => z && z.pins && z.pins.length);
+      if (!zones.length) { rows.push(base.concat(jobBits, blankZone).map(csvCell).join(',')); return; }
+      zones.forEach(z => {
+        rows.push(base.concat(jobBits, [
+          z.name || '',
+          z.mode || 'area',
+          surfaceOf(z),
+          isLine(z) ? '' : Math.round(zoneSqft(z)),
+          isLine(z) || isCut(z) ? '' : Math.round(zoneNetSqft(z)),
+          isLine(z) ? Math.round(zoneLenFt(z)) : '',
+          z.pins.length,
+        ]).map(csvCell).join(','));
+      });
+    };
+
+    // Every site gets a row even if nothing has been measured there yet — the
+    // library is the point, and an unmeasured site is still a real site.
+    readSites().forEach(site => {
+      const js = jobsBySite.get(site.id) || [];
+      if (!js.length) emit(site, null);
+      else js.forEach(j => emit(site, j));
+    });
+    // Jobs measured before anyone linked a site still belong in the file.
+    (jobsBySite.get('') || []).forEach(j => emit(null, j));
+    return rows.join('\n');
+  }
+
+  document.getElementById('site-export-btn').addEventListener('click', () => {
+    const withJobs = confirm('Include measured jobs and their pins?\n\nOK includes them (a much bigger file). Cancel exports sites only.');
+    const payload = buildLibraryExport({ jobs: withJobs });
+    if (!payload.sites.length && !payload.jobs.length) { showToast('Nothing to export yet'); return; }
+    downloadText(`yard-measure-library-${new Date().toISOString().slice(0, 10)}.json`,
+                 JSON.stringify(payload, null, 1), 'application/json');
+    showToast(`Exported ${payload.sites.length} site${payload.sites.length !== 1 ? 's' : ''}`);
+  });
+
+  document.getElementById('site-import-btn').addEventListener('click', () => {
+    document.getElementById('site-import-file').click();
+  });
+
+  document.getElementById('site-import-file').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Cleared straight away so re-picking the same file fires change again.
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let res;
+      try {
+        res = mergeImport(JSON.parse(reader.result));
+      } catch (err) {
+        showToast(err.message || "Couldn't read that file");
+        return;
+      }
+      renderSites();
+      renderSiteRow();
+      const bits = [`${res.added} added`];
+      if (res.updated) bits.push(`${res.updated} updated`);
+      if (res.skipped) bits.push(`${res.skipped} kept as-is`);
+      if (res.jobs) bits.push(`${res.jobs} jobs`);
+      showToast(bits.join(', '));
+    };
+    reader.onerror = () => showToast("Couldn't read that file");
+    reader.readAsText(file);
+  });
+
+  document.getElementById('site-export-csv-btn').addEventListener('click', () => {
+    const csv = buildLibraryCsv();
+    if (csv.split('\n').length < 2) { showToast('Nothing to export yet'); return; }
+    downloadText(`yard-measure-sites-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv');
+    showToast('CSV exported — it opens in a spreadsheet, and cannot be imported back');
+  });
+
   // ── JOB HISTORY ──────────────────────────────────────
   // The app used to hold exactly one job: measuring the next property
   // destroyed the last one, with no way back. Now every job carries an id and
