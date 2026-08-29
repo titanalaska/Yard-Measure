@@ -1475,6 +1475,8 @@
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
   <symbol id="i-tap" viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M12 11V9.5a1.5 1.5 0 0 1 3 0V12"/><path d="M15 12v-1a1.5 1.5 0 0 1 3 0v5a5 5 0 0 1-5 5h-1.6a5 5 0 0 1-3.9-1.9L5 15.5a1.6 1.6 0 0 1 2.4-2.1L9 15"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></symbol>
+  <symbol id="i-oval" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></symbol>
   <symbol id="i-pin-lock" viewBox="0 0 24 24"><path d="M12 21s-6-5.686-6-10a6 6 0 1 1 12 0c0 4.314-6 10-6 10z"/><rect x="9.5" y="9.3" width="5" height="4.2" rx="1"/><path d="M10.8 9.3V8.1a1.2 1.2 0 0 1 2.4 0v1.2"/></symbol>
   <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h18M3 15h18M9 3v18M15 3v18"/></symbol>
@@ -1695,6 +1697,19 @@
 </div>
 
 <div id="controls">
+  <!-- Appears only when the active area or cut-out has exactly two pins. Two
+       opposite corners is all a rectangle or an oval needs, so a parking island
+       costs two taps instead of four-plus — and a curbed island is an oval, not
+       a box. Deliberately not a new tap mode: it reuses whatever placement
+       method is already in hand. -->
+  <div class="btn-row" id="shape-row" style="display:none;">
+    <button class="btn btn-secondary" id="shape-box-btn" type="button">
+      <svg class="ic"><use href="#i-box"/></svg> Box from 2
+    </button>
+    <button class="btn btn-secondary" id="shape-oval-btn" type="button">
+      <svg class="ic"><use href="#i-oval"/></svg> Oval from 2
+    </button>
+  </div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="undo-btn" disabled>
       <svg class="ic"><use href="#i-undo"/></svg> Undo Pin
@@ -1852,6 +1867,9 @@
   const parcelBtn = document.getElementById('parcel-btn');
   const lockBtn = document.getElementById('lock-btn');
   const pinLockBtn = document.getElementById('pin-lock-btn');
+  const shapeRow = document.getElementById('shape-row');
+  const shapeBoxBtn = document.getElementById('shape-box-btn');
+  const shapeOvalBtn = document.getElementById('shape-oval-btn');
   const fullBtn = document.getElementById('full-btn');
   const fitBtn = document.getElementById('fit-btn');
   const crosshairBtn = document.getElementById('crosshair-btn');
@@ -1877,6 +1895,49 @@
     };
     state.zones.push(z);
     return z;
+  }
+
+  // ── QUICK SHAPES ─────────────────────────────────────
+  // Two opposite corners expanded into a full outline. A parking island is
+  // four-plus careful taps otherwise, repeated for every island on the lot.
+  //
+  // Built in lat/lng rather than the projected metre space: over something the
+  // size of an island the two are linearly related, so an ellipse in lat/lng
+  // is an ellipse on the ground, and this avoids needing an inverse projection.
+  //
+  // 12 points for the oval. A regular 12-gon inscribed in an ellipse holds
+  // about 97.7% of its area — a couple of square feet on a real island — and
+  // every extra vertex is another pin in the list and another term in the
+  // accuracy band. Precision past this buys nothing anyone can measure.
+  const OVAL_POINTS = 12;
+
+  function shapeFromTwoPins(z, kind) {
+    if (z.pins.length !== 2) return false;
+    const [p, q] = z.pins;
+    const cLat = (p.lat + q.lat) / 2, cLng = (p.lng + q.lng) / 2;
+    const aLat = Math.abs(p.lat - q.lat) / 2, aLng = Math.abs(p.lng - q.lng) / 2;
+    if (!(aLat > 0) || !(aLng > 0)) return false;   // a line, not a shape
+
+    // The generated corners are no better than the two that defined them.
+    const acc = Math.max(p.accuracy || 0, q.accuracy || 0) || mapTapAccuracyM();
+    const mk = (lat, lng) => ({ id: state.nextPinId++, lat, lng, accuracy: acc, src: 'map' });
+
+    let pins;
+    if (kind === 'box') {
+      pins = [
+        mk(cLat - aLat, cLng - aLng), mk(cLat - aLat, cLng + aLng),
+        mk(cLat + aLat, cLng + aLng), mk(cLat + aLat, cLng - aLng),
+      ];
+    } else {
+      pins = [];
+      for (let i = 0; i < OVAL_POINTS; i++) {
+        const t = (i / OVAL_POINTS) * Math.PI * 2;
+        pins.push(mk(cLat + aLat * Math.sin(t), cLng + aLng * Math.cos(t)));
+      }
+    }
+    z.pins = pins;
+    state.lastMove = null;   // the two source pins are gone; nothing to restore
+    return true;
   }
 
   function activeZone() {
@@ -2033,10 +2094,25 @@
     const act = actBtn && actBtn.dataset.act;
 
     if (act === 'add') {
-      state.activeZoneId = newZone().id;
-      if (state.tapMode) showToast('New zone — tap the map to outline it');
+      // A new zone starts as whatever you were just doing. Measuring a lot
+      // means nine cut-outs in a row, then four sidewalks in a row — and every
+      // one of those used to reset to "area, plow, no width", so the same two
+      // or three taps got repeated per feature before a single corner went
+      // down. Set it once per KIND of thing instead of once per thing.
+      // `fence` is deliberately not carried: it is one tap, and inheriting it
+      // would silently mark things as fence that are not.
+      const prev = activeZone();
+      const z = newZone(null, prev && prev.mode);
+      if (prev) {
+        z.surface = prev.surface;
+        z.widthFt = prev.widthFt;
+      }
+      state.activeZoneId = z.id;
       renderAll();
       saveState();
+      const what = isCut(z) ? 'cut-out' : isLine(z) ? 'run' : 'area';
+      const extra = isSnow() && surfaceOf(z) !== 'plow' ? ` · ${SURFACE_LABEL[surfaceOf(z)]}` : '';
+      showToast(`New ${what}${extra}${state.tapMode ? ' — tap the map to outline it' : ''}`);
       return;
     }
     const zone = state.zones.find(z => z.id === Number(chip.dataset.zone));
@@ -2270,6 +2346,19 @@
     renderAll();
     saveState();
     showToast('Last pin removed');
+  });
+
+  [['box', shapeBoxBtn], ['oval', shapeOvalBtn]].forEach(([kind, btn]) => {
+    btn.addEventListener('click', () => {
+      const z = activeZone();
+      if (!shapeFromTwoPins(z, kind)) {
+        showToast('Place two opposite corners first');
+        return;
+      }
+      renderAll({ fit: true });
+      saveState();
+      showToast(kind === 'box' ? 'Boxed it out' : 'Rounded it into an oval');
+    });
   });
 
   clearBtn.addEventListener('click', () => {
@@ -4713,6 +4802,10 @@
     const anything = state.zones.some(isDrawn);
     snapshotBtn.disabled = !anything;
     copyBtn.disabled = !anything;
+    // Only offered where it makes sense: exactly two pins, and a shape rather
+    // than a run. A run of two pins is already finished — expanding it into a
+    // box would destroy the thing the user just drew.
+    shapeRow.style.display = (z.pins.length === 2 && !isLine(z)) ? '' : 'none';
   }
 
   function renderAll(opts) {
