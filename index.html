@@ -4358,6 +4358,21 @@
     if (!q || !mapReady) return;
     try {
       const res = await fetch(`https://api.tomtom.com/search/2/geocode/${encodeURIComponent(q)}.json?key=${TOMTOM_API_KEY}&limit=1`);
+      // A rejected or exhausted key comes back as a 4xx carrying a JSON error
+      // body — not a thrown error, and not an empty result set. Without this
+      // check data.results is undefined and the app reports 'No results found',
+      // blaming the address someone typed for a key that has stopped working.
+      // That is the single most misleading thing it could say, and it is
+      // exactly what a leaked key produces once somebody else burns the quota.
+      if (!res.ok) {
+        showToast(
+          res.status === 401 || res.status === 403
+            ? `Address search unavailable — its key was rejected or is out of quota`
+            : res.status === 429
+              ? 'Address search is busy — try again in a moment'
+              : `Address search failed (HTTP ${res.status})`);
+        return;
+      }
       const data = await res.json();
       const hit = data.results && data.results[0];
       if (!hit) { showToast('No results found'); return; }
