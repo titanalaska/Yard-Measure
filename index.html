@@ -45,7 +45,7 @@
 
     --tap: 44px; /* minimum comfortable target, gloved */
 
-    /* Titan palette — kept */
+    /* Brand palette */
     --brand: #2d6a2d;
     --brand-hi: #3d8c3d;
     --brand-wash: #e8f5e8;
@@ -1796,19 +1796,19 @@
     // only what is offered and what is reported — never how anything is
     // measured, so a summer user who never touches it sees today's app.
     season: 'summer',
-    // Fleet and operating practice — these describe how Titan works, not a
-    // site, so they outlive any one job. Everything here except the pile
+    // Fleet and operating practice — these describe how an outfit works, not
+    // a site, so they outlive any one job. Everything here except the pile
     // height is a judgment call and ships empty on purpose: a number invented
     // in code reads as fact six months later.
     snowPrefs: {
-      pileHeightFt: 20,          // Titan's own working figure for a finished pile
+      pileHeightFt: 20,          // the one value here that ships with a default
       packingFactor: '',
       truckCapacityYd3: '',
       sandRateLbsPer1000: '',
     },
     // The site, its contract, and the storm being tested. Compaction lives
     // here rather than with the fleet settings because it is NOT a property of
-    // how Titan works — it is a property of that snowfall. Cold dry powder is
+    // how the crew works — it is a property of that snowfall. Cold dry powder is
     // mostly air and shrinks enormously when pushed; wet spring snow is already
     // dense and barely shrinks at all. One number carried across the season
     // would silently apply a wet-snow ratio to a powder event.
@@ -1818,7 +1818,7 @@
       removalWindowHrs: '',
       triggerDepthIn: '',
     },
-    // How Titan builds fence, not a fact about any one site — so it outlives
+    // How a crew builds fence, not a fact about any one site — so it outlives
     // the job. Both ship EMPTY and are retained once entered: the app must
     // never assert a spacing it made up, and must never ask twice. Post
     // spacing is genuinely unsettled (panel widths constrain it; chainlink
@@ -3182,11 +3182,11 @@
     // exactly that and reasonably concluded it was broken.
     let head = '';
     if (cap != null) {
-      // Loads to empty a full pile. Titan no longer runs its own dump, so
-      // hauling the pile is a real, costed operation — "how many trips" is the
-      // question, not just "does it fit". Previously loads only appeared for
-      // the excess over capacity, so a site that fit reported no trips at all
-      // even with a truck capacity entered.
+      // Loads to empty a full pile. A crew with nowhere on site to put the snow
+      // has to haul it, so "how many trips" is the real question, not just
+      // "does it fit". Previously loads only appeared for the excess over
+      // capacity, so a site that fit reported no trips at all even with a truck
+      // capacity entered.
       const emptyLoads = haulLoads(cap);
       head = `<strong>Storage holds ${yd(cap)} yd³</strong>`
         + (emptyLoads != null ? ` · ${emptyLoads.toLocaleString()} load${emptyLoads !== 1 ? 's' : ''} to empty` : '')
