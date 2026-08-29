@@ -667,6 +667,23 @@
 
   .zone-chip .chip-act:active { opacity: 1; background: rgba(0,0,0,.08); }
 
+  /* The surface chip carries a label, not an icon, so it needs room to breathe
+     and a swatch tying it to the colour the zone draws in on the map. */
+  .zone-chip .chip-act.surface-act {
+    width: auto;
+    gap: 5px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .surface-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
   .zone-chip.add {
     border-style: dashed;
     font-weight: 700;
@@ -1475,6 +1492,8 @@
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
   <symbol id="i-tap" viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M12 11V9.5a1.5 1.5 0 0 1 3 0V12"/><path d="M15 12v-1a1.5 1.5 0 0 1 3 0v5a5 5 0 0 1-5 5h-1.6a5 5 0 0 1-3.9-1.9L5 15.5a1.6 1.6 0 0 1 2.4-2.1L9 15"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></symbol>
+  <symbol id="i-oval" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></symbol>
   <symbol id="i-pin-lock" viewBox="0 0 24 24"><path d="M12 21s-6-5.686-6-10a6 6 0 1 1 12 0c0 4.314-6 10-6 10z"/><rect x="9.5" y="9.3" width="5" height="4.2" rx="1"/><path d="M10.8 9.3V8.1a1.2 1.2 0 0 1 2.4 0v1.2"/></symbol>
   <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h18M3 15h18M9 3v18M15 3v18"/></symbol>
@@ -1695,6 +1714,19 @@
 </div>
 
 <div id="controls">
+  <!-- Appears only when the active area or cut-out has exactly two pins. Two
+       opposite corners is all a rectangle or an oval needs, so a parking island
+       costs two taps instead of four-plus — and a curbed island is an oval, not
+       a box. Deliberately not a new tap mode: it reuses whatever placement
+       method is already in hand. -->
+  <div class="btn-row" id="shape-row" style="display:none;">
+    <button class="btn btn-secondary" id="shape-box-btn" type="button">
+      <svg class="ic"><use href="#i-box"/></svg> Box from 2
+    </button>
+    <button class="btn btn-secondary" id="shape-oval-btn" type="button">
+      <svg class="ic"><use href="#i-oval"/></svg> Oval from 2
+    </button>
+  </div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="undo-btn" disabled>
       <svg class="ic"><use href="#i-undo"/></svg> Undo Pin
@@ -1852,6 +1884,9 @@
   const parcelBtn = document.getElementById('parcel-btn');
   const lockBtn = document.getElementById('lock-btn');
   const pinLockBtn = document.getElementById('pin-lock-btn');
+  const shapeRow = document.getElementById('shape-row');
+  const shapeBoxBtn = document.getElementById('shape-box-btn');
+  const shapeOvalBtn = document.getElementById('shape-oval-btn');
   const fullBtn = document.getElementById('full-btn');
   const fitBtn = document.getElementById('fit-btn');
   const crosshairBtn = document.getElementById('crosshair-btn');
@@ -1879,6 +1914,49 @@
     return z;
   }
 
+  // ── QUICK SHAPES ─────────────────────────────────────
+  // Two opposite corners expanded into a full outline. A parking island is
+  // four-plus careful taps otherwise, repeated for every island on the lot.
+  //
+  // Built in lat/lng rather than the projected metre space: over something the
+  // size of an island the two are linearly related, so an ellipse in lat/lng
+  // is an ellipse on the ground, and this avoids needing an inverse projection.
+  //
+  // 12 points for the oval. A regular 12-gon inscribed in an ellipse holds
+  // about 97.7% of its area — a couple of square feet on a real island — and
+  // every extra vertex is another pin in the list and another term in the
+  // accuracy band. Precision past this buys nothing anyone can measure.
+  const OVAL_POINTS = 12;
+
+  function shapeFromTwoPins(z, kind) {
+    if (z.pins.length !== 2) return false;
+    const [p, q] = z.pins;
+    const cLat = (p.lat + q.lat) / 2, cLng = (p.lng + q.lng) / 2;
+    const aLat = Math.abs(p.lat - q.lat) / 2, aLng = Math.abs(p.lng - q.lng) / 2;
+    if (!(aLat > 0) || !(aLng > 0)) return false;   // a line, not a shape
+
+    // The generated corners are no better than the two that defined them.
+    const acc = Math.max(p.accuracy || 0, q.accuracy || 0) || mapTapAccuracyM();
+    const mk = (lat, lng) => ({ id: state.nextPinId++, lat, lng, accuracy: acc, src: 'map' });
+
+    let pins;
+    if (kind === 'box') {
+      pins = [
+        mk(cLat - aLat, cLng - aLng), mk(cLat - aLat, cLng + aLng),
+        mk(cLat + aLat, cLng + aLng), mk(cLat + aLat, cLng - aLng),
+      ];
+    } else {
+      pins = [];
+      for (let i = 0; i < OVAL_POINTS; i++) {
+        const t = (i / OVAL_POINTS) * Math.PI * 2;
+        pins.push(mk(cLat + aLat * Math.sin(t), cLng + aLng * Math.cos(t)));
+      }
+    }
+    z.pins = pins;
+    state.lastMove = null;   // the two source pins are gone; nothing to restore
+    return true;
+  }
+
   function activeZone() {
     return state.zones.find(z => z.id === state.activeZoneId) || state.zones[0];
   }
@@ -1899,6 +1977,26 @@
   // Surface is orthogonal to mode. Mode is geometry — is this a shape, a hole,
   // or a run. Surface is who clears it and how, which is what separates a lot
   // from a sidewalk from the stairs by the door when someone prices the job.
+  // One palette, used by the map, the zone chips and the snapshot, so a colour
+  // means the same thing wherever it appears. Red is reserved for cut-outs and
+  // is not in here — that meaning predates snow and outranks surface.
+  //   plow    green   the default working ground
+  //   walk    blue    matches how runs already draw, and a sidewalk usually IS one
+  //   hand    amber   slow, careful, done by hand — reads as "attention"
+  //   storage violet  not cleared at all; snow goes TO it, so it should not
+  //                   look like the surfaces snow comes OFF
+  const SURFACE_COLOR = {
+    plow: '#2d6a2d',
+    walk: '#1c6fb0',
+    hand: '#d98c00',
+    storage: '#7d5ba6',
+  };
+
+  const hexToRgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
   const SURFACES = ['plow', 'walk', 'hand', 'storage'];
   const SURFACE_LABEL = { plow: 'Plow', walk: 'Walk', hand: 'Hand', storage: 'Storage' };
   const SURFACE_NOUN = {
@@ -2003,7 +2101,12 @@
       else label = `${cut ? '−' : ''}${Math.round(cut ? zoneSqft(z) : zoneNetSqft(z)).toLocaleString()} ft²`;
       const acts = active
         ? (isSnow() && !isCut(z)
-            ? `<button class="chip-act" data-act="surface" title="Change surface">${SURFACE_LABEL[surfaceOf(z)]}</button>`
+            ? `<button class="chip-act surface-act" data-act="surface" title="Change surface"` +
+              // A dot in the surface's own colour, so the chip you tap to change
+              // it also tells you which colour that zone is on the map.
+              ` style="color:${SURFACE_COLOR[surfaceOf(z)]};opacity:1;">` +
+              `<span class="surface-dot" style="background:${SURFACE_COLOR[surfaceOf(z)]}"></span>` +
+              `${SURFACE_LABEL[surfaceOf(z)]}</button>`
             : '') +
           (!isSnow() && isLine(z)
             ? `<button class="chip-act" data-act="fence" title="Mark this run as fence">${z.fence ? 'Fence' : 'Run'}</button>`
@@ -2033,10 +2136,25 @@
     const act = actBtn && actBtn.dataset.act;
 
     if (act === 'add') {
-      state.activeZoneId = newZone().id;
-      if (state.tapMode) showToast('New zone — tap the map to outline it');
+      // A new zone starts as whatever you were just doing. Measuring a lot
+      // means nine cut-outs in a row, then four sidewalks in a row — and every
+      // one of those used to reset to "area, plow, no width", so the same two
+      // or three taps got repeated per feature before a single corner went
+      // down. Set it once per KIND of thing instead of once per thing.
+      // `fence` is deliberately not carried: it is one tap, and inheriting it
+      // would silently mark things as fence that are not.
+      const prev = activeZone();
+      const z = newZone(null, prev && prev.mode);
+      if (prev) {
+        z.surface = prev.surface;
+        z.widthFt = prev.widthFt;
+      }
+      state.activeZoneId = z.id;
       renderAll();
       saveState();
+      const what = isCut(z) ? 'cut-out' : isLine(z) ? 'run' : 'area';
+      const extra = isSnow() && surfaceOf(z) !== 'plow' ? ` · ${SURFACE_LABEL[surfaceOf(z)]}` : '';
+      showToast(`New ${what}${extra}${state.tapMode ? ' — tap the map to outline it' : ''}`);
       return;
     }
     const zone = state.zones.find(z => z.id === Number(chip.dataset.zone));
@@ -2270,6 +2388,19 @@
     renderAll();
     saveState();
     showToast('Last pin removed');
+  });
+
+  [['box', shapeBoxBtn], ['oval', shapeOvalBtn]].forEach(([kind, btn]) => {
+    btn.addEventListener('click', () => {
+      const z = activeZone();
+      if (!shapeFromTwoPins(z, kind)) {
+        showToast('Place two opposite corners first');
+        return;
+      }
+      renderAll({ fit: true });
+      saveState();
+      showToast(kind === 'box' ? 'Boxed it out' : 'Rounded it into an oval');
+    });
   });
 
   clearBtn.addEventListener('click', () => {
@@ -3533,13 +3664,24 @@
     map.addLayer({
       id: 'yard-shape-fill', type: 'fill', source: 'yard-shape',
       paint: {
+        // Red already means "not worked" — a building, a planter, anything cut
+        // out — so it stays first and outranks everything. Past that, snow
+        // colours by what a zone is FOR, because on a hospital lot the useful
+        // question looking at the map is which of these is walk and which is
+        // where the piles go, not which one happens to be selected.
         'fill-color': ['case',
           ['get', 'cut'], '#c0392b',
+          ['==', ['get', 'surface'], 'walk'], SURFACE_COLOR.walk,
+          ['==', ['get', 'surface'], 'hand'], SURFACE_COLOR.hand,
+          ['==', ['get', 'surface'], 'storage'], SURFACE_COLOR.storage,
           ['get', 'active'], '#2d6a2d',
           '#3a3a3a'],
+        // A surface-coloured zone stays legible whether or not it is selected,
+        // otherwise the colour coding disappears the moment you work elsewhere.
         'fill-opacity': ['case',
           ['get', 'cut'], 0.3,
-          ['get', 'active'], 0.25,
+          ['get', 'active'], 0.3,
+          ['!=', ['get', 'surface'], ''], 0.22,
           0.12],
       },
     });
@@ -3550,7 +3692,10 @@
     // pattern constant, which is supported.
     map.addLayer({
       id: 'yard-shape-line-other', type: 'line', source: 'yard-shape',
-      filter: ['all', ['!', ['get', 'active']], ['!', ['get', 'cut']], ['!', ['get', 'line']]],
+      // Surface-coloured shapes are excluded — they get their own solid outline
+      // below, and drawing both would put grey dashes over the colour.
+      filter: ['all', ['!', ['get', 'active']], ['!', ['get', 'cut']], ['!', ['get', 'line']],
+               ['any', ['==', ['get', 'surface'], ''], ['==', ['get', 'surface'], 'plow']]],
       paint: { 'line-color': '#dddddd', 'line-width': 2, 'line-dasharray': [2, 2], 'line-opacity': 0.9 },
     });
     // Runs get their own heavier blue stroke — they read as a length of
@@ -3560,7 +3705,13 @@
       filter: ['get', 'line'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': ['case', ['get', 'active'], '#3aa0ff', '#8fc7f0'],
+        // A run carries its surface too: a sidewalk walked as a line should
+        // read the same colour as one outlined as a shape.
+        'line-color': ['case',
+          ['==', ['get', 'surface'], 'hand'], SURFACE_COLOR.hand,
+          ['==', ['get', 'surface'], 'storage'], SURFACE_COLOR.storage,
+          ['get', 'active'], '#3aa0ff',
+          '#8fc7f0'],
         'line-width': ['case', ['get', 'active'], 6, 4],
       },
     });
@@ -3572,8 +3723,47 @@
     map.addLayer({
       id: 'yard-shape-line', type: 'line', source: 'yard-shape',
       filter: ['all', ['get', 'active'], ['!', ['get', 'cut']], ['!', ['get', 'line']]],
-      paint: { 'line-color': '#2d6a2d', 'line-width': 3 },
+      paint: {
+        'line-color': ['case',
+          ['==', ['get', 'surface'], 'walk'], SURFACE_COLOR.walk,
+          ['==', ['get', 'surface'], 'hand'], SURFACE_COLOR.hand,
+          ['==', ['get', 'surface'], 'storage'], SURFACE_COLOR.storage,
+          '#2d6a2d'],
+        'line-width': 3,
+      },
     });
+    // An unselected surface-coloured shape still gets its own outline, so the
+    // colour survives selecting something else — otherwise every zone but the
+    // active one falls back to the same grey dashes and the coding is lost.
+    map.addLayer({
+      id: 'yard-shape-line-surface', type: 'line', source: 'yard-shape',
+      filter: ['all', ['!', ['get', 'active']], ['!', ['get', 'cut']], ['!', ['get', 'line']],
+               ['!=', ['get', 'surface'], ''], ['!=', ['get', 'surface'], 'plow']],
+      paint: {
+        'line-color': ['case',
+          ['==', ['get', 'surface'], 'walk'], SURFACE_COLOR.walk,
+          ['==', ['get', 'surface'], 'hand'], SURFACE_COLOR.hand,
+          ['==', ['get', 'surface'], 'storage'], SURFACE_COLOR.storage,
+          '#dddddd'],
+        'line-width': 2, 'line-opacity': 0.85,
+      },
+    });
+
+    // MapLibre answers a bad paint or filter expression by logging and dropping
+    // the whole layer — the comment above about line-dasharray is that lesson
+    // already learned once, and the symptom was a shape with a fill and no
+    // outline. Surface colouring added several expressions that could not be
+    // exercised where it was written, so the layers are counted here: a missing
+    // one says so out loud instead of quietly leaving the map wrong.
+    const EXPECTED_SHAPE_LAYERS = [
+      'yard-shape-fill', 'yard-shape-line-other', 'yard-shape-run',
+      'yard-shape-line-cut', 'yard-shape-line', 'yard-shape-line-surface',
+    ];
+    const missing = EXPECTED_SHAPE_LAYERS.filter(id => !map.getLayer(id));
+    if (missing.length) {
+      console.error('Yard Measure: map layers dropped —', missing.join(', '));
+      showToast(`Map layer problem: ${missing.length} layer${missing.length !== 1 ? 's' : ''} did not load`);
+    }
   }
 
   // How precisely a corner can be placed by tapping. A fingertip lands within
@@ -3871,7 +4061,15 @@
       else if (coords.length === 2) geometry = { type: 'LineString', coordinates: coords };
       if (!geometry) return null;
       return { type: 'Feature',
-        properties: { active: zone.id === state.activeZoneId, cut: isCut(zone), line: isLine(zone) },
+        properties: {
+          active: zone.id === state.activeZoneId,
+          cut: isCut(zone),
+          line: isLine(zone),
+          // Surface only colours anything in snow. In summer every zone is
+          // ground being worked and the mode is the useful distinction; in
+          // snow, what a zone is FOR is the distinction that matters.
+          surface: isSnow() && !isCut(zone) ? surfaceOf(zone) : '',
+        },
         geometry };
     }).filter(Boolean);
 
@@ -4102,11 +4300,17 @@
         y: offY + (p.y - minY) * scale,
       }));
       const active = z.id === state.activeZoneId;
+      // The card carries the map's colour coding, or someone reading the
+      // exported picture cannot tell a sidewalk from a pile area.
+      const surfCol = (isSnow() && !isCut(z) && surfaceOf(z) !== 'plow')
+        ? SURFACE_COLOR[surfaceOf(z)] : null;
       drawPolygon(g, zPts, {
         open: isLine(z),
-        fill: isCut(z) ? 'rgba(192,57,43,0.16)' : active ? 'rgba(45,106,45,0.12)' : 'rgba(60,60,60,0.08)',
-        stroke: isLine(z) ? '#1c6fb0' : isCut(z) ? '#c0392b' : active ? '#2d6a2d' : '#999',
-        width: isLine(z) ? 5 : 3, dot: 11, dotFill: '#1c6fb0',
+        fill: isCut(z) ? 'rgba(192,57,43,0.16)'
+          : surfCol ? hexToRgba(surfCol, 0.14)
+          : active ? 'rgba(45,106,45,0.12)' : 'rgba(60,60,60,0.08)',
+        stroke: surfCol || (isLine(z) ? '#1c6fb0' : isCut(z) ? '#c0392b' : active ? '#2d6a2d' : '#999'),
+        width: isLine(z) ? 5 : 3, dot: 11, dotFill: surfCol || '#1c6fb0',
         numbered: active && !isCut(z),
       });
     });
@@ -4583,7 +4787,10 @@
           g.font = `400 26px ${F}`;
           g.textAlign = 'left';
           g.fillText(label, 40, cursorY);
-          g.fillStyle = label === 'Storage' ? '#1c6fb0' : '#2d6a2d';
+          // Each figure in the colour its shape is drawn in on the map above,
+          // so the list reads as a legend for the picture rather than as an
+          // unrelated table. Storage used to share blue with walk.
+          g.fillStyle = SURFACE_COLOR[label.toLowerCase()] || '#2d6a2d';
           g.font = `700 26px ${F}`;
           g.textAlign = 'right';
           g.fillText(`${ftv(v)} ft²`, W - 40, cursorY);
@@ -4713,6 +4920,10 @@
     const anything = state.zones.some(isDrawn);
     snapshotBtn.disabled = !anything;
     copyBtn.disabled = !anything;
+    // Only offered where it makes sense: exactly two pins, and a shape rather
+    // than a run. A run of two pins is already finished — expanding it into a
+    // box would destroy the thing the user just drew.
+    shapeRow.style.display = (z.pins.length === 2 && !isLine(z)) ? '' : 'none';
   }
 
   function renderAll(opts) {
