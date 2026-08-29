@@ -1787,6 +1787,9 @@
     // a tapped one, with the snapshot's error range quietly changed to match.
     lastMove: null,
     jobId: null,
+    // Which library site this job measured, or null. The free-text name stays
+    // exactly as it was; this sits beside it as the durable identity.
+    siteId: null,
     jobStarted: null,
     theme: 'auto',
     resultOpen: false,
@@ -5028,6 +5031,7 @@
         nextZoneId: state.nextZoneId,
         nextPinId: state.nextPinId,
         jobLabel: jobLabelInput.value,
+        siteId: state.siteId,
         mapLocked: state.mapLocked,
         pinsLocked: state.pinsLocked,
         jobId: state.jobId,
@@ -5091,6 +5095,7 @@
     }
 
     if (saved.jobLabel) jobLabelInput.value = saved.jobLabel;
+    state.siteId = saved.siteId || null;
     if (saved.mapLocked) state.mapLocked = true;
     // Absent on anything saved before pins could be locked, and those default
     // to locked like everything else — the safe direction to be wrong in.
@@ -5549,6 +5554,36 @@
     };
   }
 
+  // Replaced by the real renderer when the sheet lands. Declared here so this
+  // step stands alone and setJobSite can be exercised before the UI exists.
+  function renderSiteRow() {}
+
+  // The job keeps its free-text name; siteId sits beside it. Nothing that
+  // reads job.name has to change, and a job saved before this feature loads
+  // with siteId null and behaves exactly as it did.
+  function setJobSite(siteId) {
+    const site = getSite(siteId);
+    state.siteId = site ? site.id : null;
+    // Naming is a convenience, never a lock — the name stays freely editable,
+    // and clearing the site does not wipe a name someone already typed.
+    if (site) jobLabelInput.value = siteJobName(site);
+    saveState();
+    syncCurrentJob();
+    renderSiteRow();
+  }
+
+  // A site's coordinates come from the first job measured there, and only
+  // from the first — re-measuring a lot must not walk its pin across the map.
+  // Called from syncCurrentJob(), which runs on every mutation, so the
+  // early return on an already-placed site is what keeps it cheap.
+  function stampSiteLocation() {
+    const site = getSite(state.siteId);
+    if (!site || typeof site.lat === 'number') return;
+    const c = jobCentroid();
+    if (!c) return;
+    upsertSite({ ...site, lat: c.lat, lng: c.lng });
+  }
+
   // ── JOB HISTORY ──────────────────────────────────────
   // The app used to hold exactly one job: measuring the next property
   // destroyed the last one, with no way back. Now every job carries an id and
@@ -5588,6 +5623,7 @@
     return {
       id: state.jobId,
       name: jobTitle(),
+      siteId: state.siteId || null,
       started: state.jobStarted,
       savedAt: Date.now(),
       sqft: Math.round(jobSqft()),
@@ -5608,6 +5644,7 @@
   // measured, so half-tapped scratch work doesn't clutter the list.
   function syncCurrentJob() {
     if (!state.zones.some(isDrawn)) return;
+    stampSiteLocation();
     const jobs = readJobs().filter(j => j.id !== state.jobId);
     jobs.unshift(snapshotOfCurrentJob());
     writeJobs(jobs.slice(0, MAX_JOBS));
@@ -5625,6 +5662,9 @@
     setPinsLocked(true);
     state.lastMove = null;
     jobLabelInput.value = seed && seed.name ? seed.name : '';
+    // A duplicated job is the same ground measured again, so it keeps the
+    // site. A brand-new job starts unlinked.
+    state.siteId = (seed && seed.siteId) || null;
     if (seed && seed.zones) {
       state.zones = JSON.parse(JSON.stringify(seed.zones));
       // A duplicated job can be older than every field below — this is a third
@@ -5656,6 +5696,8 @@
     syncCurrentJob();
     state.jobId = job.id;
     state.jobStarted = job.started || job.savedAt;
+    // A job saved before the library has no siteId, and stays unlinked.
+    state.siteId = job.siteId || null;
     state.zones = job.zones || [];
     state.zones.forEach(z => {
       if (!z.mode) z.mode = 'area';
@@ -5751,7 +5793,8 @@
       const job = readJobs().find(j => j.id === btn.dataset.dup);
       if (!job) return;
       syncCurrentJob();
-      startNewJob({ name: `${job.name} (copy)`, zones: job.zones, nextZoneId: job.nextZoneId, nextPinId: job.nextPinId });
+      startNewJob({ name: `${job.name} (copy)`, siteId: job.siteId, zones: job.zones,
+                    nextZoneId: job.nextZoneId, nextPinId: job.nextPinId });
       syncCurrentJob();
       closeJobs();
       showToast('Duplicated — measurements copied');
