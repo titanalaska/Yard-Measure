@@ -5395,6 +5395,160 @@
     }
   });
 
+  // ── SITE LIBRARY ─────────────────────────────────────
+  // A job's whole identity used to be one free-text name, so the same lot
+  // measured twice produced two unrelated rows of text. A site is now a
+  // record with an id that outlives any single measurement.
+  //
+  // Sites live under their own key on purpose. writeJobs() drops the oldest
+  // half of the job list when localStorage fills, which is survivable for job
+  // history and destructive for a library someone spent a season building.
+  // Nothing on the job path may write this key.
+  //
+  // The library ships EMPTY. A company's own sites arrive as an import, never
+  // as a constant in here — see docs/site-seed-README.md.
+  const SITES_KEY = 'yardMeasureSites';
+
+  function readSites() {
+    try { return JSON.parse(localStorage.getItem(SITES_KEY)) || []; } catch (e) { return []; }
+  }
+
+  // Deliberately has no trim fallback, unlike writeJobs(). A full quota here
+  // is a real failure the user has to hear about — silently halving the
+  // library would be worse than refusing the write.
+  function writeSites(sites) {
+    try {
+      localStorage.setItem(SITES_KEY, JSON.stringify(sites));
+      return true;
+    } catch (e) {
+      showToast("Couldn't save the site library — storage is full");
+      return false;
+    }
+  }
+
+  function newSiteId() {
+    return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  // Every field is materialised, so a site from an old export and one typed
+  // this morning have the same shape and every reader can stop guarding.
+  function makeSite(fields) {
+    const f = fields || {};
+    const now = Date.now();
+    const str = v => (v == null ? '' : String(v).trim());
+    return {
+      id: f.id || newSiteId(),
+      label: str(f.label),
+      address: str(f.address),
+      // Never derived from the label. Real exported lists put the customer
+      // sometimes as a prefix, sometimes fused into the site name, sometimes
+      // not at all — so a human sets this or it stays empty.
+      customer: str(f.customer),
+      // Generic on purpose: a route, a crew, a city, a snow pod. Whatever the
+      // company groups work by, and it churns season to season, which is why
+      // it is an ordinary editable field and not a fixed vocabulary.
+      group: str(f.group),
+      note: str(f.note),
+      lat: typeof f.lat === 'number' ? f.lat : null,
+      lng: typeof f.lng === 'number' ? f.lng : null,
+      createdAt: f.createdAt || now,
+      updatedAt: f.updatedAt || now,
+    };
+  }
+
+  function getSite(id) {
+    if (!id) return null;
+    return readSites().find(s => s.id === id) || null;
+  }
+
+  function upsertSite(site) {
+    const sites = readSites();
+    const i = sites.findIndex(s => s.id === site.id);
+    if (i >= 0) sites[i] = { ...sites[i], ...site, updatedAt: Date.now() };
+    else sites.unshift(site);
+    writeSites(sites);
+    return site;
+  }
+
+  function deleteSite(id) {
+    writeSites(readSites().filter(s => s.id !== id));
+  }
+
+  // The job-label input is capped at 60 characters, so this is too — a long
+  // label plus a long address must not silently produce a name the input
+  // refuses to hold.
+  function siteJobName(site) {
+    if (!site) return '';
+    return [site.label, site.address].filter(Boolean).join(' — ').slice(0, 60);
+  }
+
+  // Layer 2 of duplicate defence. Field crews type "AVE" one week and
+  // "AVENUE" the next; without this the same lot enters the library twice by
+  // ordinary use. Long forms collapse to the short form because the short
+  // form is what gets typed on a phone.
+  const ADDR_ABBREV = {
+    AVENUE: 'AVE', AV: 'AVE', ROAD: 'RD', STREET: 'ST', HIGHWAY: 'HWY',
+    DRIVE: 'DR', BOULEVARD: 'BLVD', CIRCLE: 'CIR', COURT: 'CT', LANE: 'LN',
+    PLACE: 'PL', PARKWAY: 'PKWY', TERRACE: 'TER', TRAIL: 'TRL', SUITE: 'STE',
+    NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W',
+  };
+
+  function normalizeAddress(s) {
+    if (!s) return '';
+    return String(s).toUpperCase()
+      .replace(/[^A-Z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(w => ADDR_ABBREV[w] || w)
+      .join(' ');
+  }
+
+  // Returns the site to OFFER, never one to merge into — the caller asks a
+  // human. Exact normalised equality only: fuzzy matching would fold 4904 and
+  // 4908 on the same street together, and those are adjacent lots.
+  function findSiteByAddress(addr, excludeId) {
+    const n = normalizeAddress(addr);
+    if (!n) return null;
+    return readSites().find(s => s.id !== excludeId && normalizeAddress(s.address) === n) || null;
+  }
+
+  // Layer 3, and the weakest on purpose. Real route data says proximity
+  // cannot detect duplicates: one customer has six sites on a single street
+  // with two of them adjacent lots, another has eight across two streets. A
+  // radius tight enough to separate neighbours is too tight to survive
+  // ordinary GPS error, and one loose enough to be reliable swallows them. So
+  // this suggests, a human confirms, and siteId records the answer.
+  const SITE_NEAR_M = 40;
+
+  // Reuses the map's own equirectangular projection, anchored on `a`, so this
+  // agrees with every other distance the app computes.
+  function metersBetween(a, b) {
+    const [p, q] = project([a, b], a);
+    return Math.hypot(q.x - p.x, q.y - p.y);
+  }
+
+  function nearestSite(lat, lng, maxM) {
+    let best = null, bestD = Infinity;
+    readSites().forEach(s => {
+      if (typeof s.lat !== 'number' || typeof s.lng !== 'number') return;
+      const d = metersBetween({ lat, lng }, s);
+      if (d < bestD) { bestD = d; best = s; }
+    });
+    return best && bestD <= (maxM == null ? SITE_NEAR_M : maxM) ? { site: best, meters: bestD } : null;
+  }
+
+  // Where a site sits, once something has actually been measured there. Mean
+  // of every drawn pin — a lot's pins ring its edge, so their mean lands in
+  // the middle of it.
+  function jobCentroid() {
+    const pins = state.zones.filter(isDrawn).reduce((acc, z) => acc.concat(z.pins), []);
+    if (!pins.length) return null;
+    return {
+      lat: pins.reduce((s, p) => s + p.lat, 0) / pins.length,
+      lng: pins.reduce((s, p) => s + p.lng, 0) / pins.length,
+    };
+  }
+
   // ── JOB HISTORY ──────────────────────────────────────
   // The app used to hold exactly one job: measuring the next property
   // destroyed the last one, with no way back. Now every job carries an id and
