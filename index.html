@@ -279,8 +279,9 @@
      persist after the finger lifts, unlike the shared :active flash above. */
   .hdr-btn.active { background: rgba(255,255,255,0.32); border-color: rgba(255,255,255,0.75); }
 
-  /* JOBS SHEET */
-  #jobs-overlay {
+  /* JOBS SHEET - the site library sheet is the same object with a different
+     list in it, so it shares every rule rather than duplicating them. */
+  #jobs-overlay, #sites-overlay {
     display: none;
     position: fixed;
     inset: 0;
@@ -290,9 +291,9 @@
     justify-content: center;
   }
 
-  #jobs-overlay.open { display: flex; }
+  #jobs-overlay.open, #sites-overlay.open { display: flex; }
 
-  #jobs-sheet {
+  #jobs-sheet, #sites-sheet {
     background: var(--light);
     width: 100%;
     max-width: 560px;
@@ -402,6 +403,65 @@
   }
 
   .job-act:active { background: var(--surface-2); color: var(--text); }
+
+  /* The site line above the job name. Reads as a chip when linked and as a
+     quiet invitation when not, because most jobs will start unlinked. */
+  #site-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--mid);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #site-row.linked { color: var(--green); border-color: var(--green); }
+  #site-row:active { background: var(--surface-2); }
+  #site-row .site-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .site-form { display: grid; gap: 8px; margin: 10px 0; }
+
+  .site-form input, .site-form textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--dark);
+    background: var(--surface);
+  }
+
+  .site-form input:focus, .site-form textarea:focus {
+    outline: none;
+    border-color: var(--green-light);
+  }
+
+  .site-form textarea { min-height: 56px; resize: vertical; }
+
+  #site-search {
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--dark);
+    background: var(--surface);
+  }
+
+  #site-search:focus { outline: none; border-color: var(--green-light); }
 
   /* STATUS BAR */
   /* Read at arm's length, outdoors, in sun — so the accuracy figure is the
@@ -1541,11 +1601,48 @@
     <button class="btn btn-secondary" id="new-job-btn" type="button">
       <svg class="ic"><use href="#i-plus"/></svg> Start a new job
     </button>
+    <button class="btn btn-secondary" id="sites-open-btn" type="button" style="margin-top:8px;">
+      <svg class="ic"><use href="#i-jobs"/></svg> Site library
+    </button>
     <button class="btn btn-secondary" id="install-btn" type="button" style="display:none;margin-top:8px;">
       <svg class="ic"><use href="#i-install"/></svg> Add to home screen
     </button>
     <div id="jobs-list"></div>
     <p class="sheet-note" id="offline-note">Every job saves itself as you measure. Tap one to reopen it.</p>
+  </div>
+</div>
+
+<div id="sites-overlay">
+  <div id="sites-sheet">
+    <div class="sheet-head">
+      <span class="sheet-title">Site library</span>
+      <button class="sheet-close" id="sites-close" type="button" title="Close"><svg class="ic ic-lg"><use href="#i-x"/></svg></button>
+    </div>
+    <input type="text" id="site-search" placeholder="Search label, address, customer or group">
+    <button class="btn btn-secondary" id="site-add-btn" type="button">
+      <svg class="ic"><use href="#i-plus"/></svg> Add a site
+    </button>
+    <div id="site-form-wrap" style="display:none;">
+      <div class="site-form">
+        <input type="text" id="site-f-label" placeholder="Label - what the crew calls it" maxlength="80">
+        <input type="text" id="site-f-address" placeholder="Address" maxlength="120">
+        <input type="text" id="site-f-customer" placeholder="Customer (optional)" maxlength="80">
+        <input type="text" id="site-f-group" placeholder="Group (optional) - route, crew, city" maxlength="60">
+        <textarea id="site-f-note" placeholder="Note (optional)" maxlength="400"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="site-cancel-btn" type="button">Cancel</button>
+        <button class="btn btn-primary" id="site-save-btn" type="button">Save site</button>
+      </div>
+    </div>
+    <div id="sites-list"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="btn btn-secondary" id="site-export-btn" type="button">Export library</button>
+      <button class="btn btn-secondary" id="site-import-btn" type="button">Import</button>
+    </div>
+    <button class="btn btn-secondary" id="site-export-csv-btn" type="button" style="margin-top:8px;">Export CSV (spreadsheet)</button>
+    <input type="file" id="site-import-file" accept="application/json,.json" style="display:none;">
+    <p class="sheet-note">Sites stay on this phone. Export the library to move it to another one.</p>
   </div>
 </div>
 
@@ -1710,6 +1807,12 @@
 </div>
 
 <div id="snapshot-section">
+  <!-- Sits above the name because the site is the durable identity and the
+       name is only the human label for it - picking a site fills the name in. -->
+  <button id="site-row" type="button">
+    <svg class="ic"><use href="#i-jobs"/></svg>
+    <span class="site-row-text" id="site-row-text">Link a site</span>
+  </button>
   <input type="text" id="job-label" placeholder="Job name or address (optional)" maxlength="60">
 </div>
 
@@ -1787,6 +1890,9 @@
     // a tapped one, with the snapshot's error range quietly changed to match.
     lastMove: null,
     jobId: null,
+    // Which library site this job measured, or null. The free-text name stays
+    // exactly as it was; this sits beside it as the durable identity.
+    siteId: null,
     jobStarted: null,
     theme: 'auto',
     resultOpen: false,
@@ -2345,6 +2451,9 @@
       if (!ok) return;
     }
 
+    // Only on the first pin of the job — asking again on pin nine would be
+    // noise, and by then the crew has answered the question by measuring.
+    if (!state.zones.some(z => z.pins.length)) maybeOfferNearbySite(avg.lat, avg.lng);
     addPin({ lat: avg.lat, lng: avg.lng, accuracy: avg.accuracy, samples: fixes.length, src: 'gps' }, { fit: true });
     showToast(`Pin ${activeZone().pins.length} dropped (${fixes.length} fix${fixes.length !== 1 ? 'es' : ''} averaged)`);
   });
@@ -5028,6 +5137,7 @@
         nextZoneId: state.nextZoneId,
         nextPinId: state.nextPinId,
         jobLabel: jobLabelInput.value,
+        siteId: state.siteId,
         mapLocked: state.mapLocked,
         pinsLocked: state.pinsLocked,
         jobId: state.jobId,
@@ -5091,6 +5201,7 @@
     }
 
     if (saved.jobLabel) jobLabelInput.value = saved.jobLabel;
+    state.siteId = saved.siteId || null;
     if (saved.mapLocked) state.mapLocked = true;
     // Absent on anything saved before pins could be locked, and those default
     // to locked like everything else — the safe direction to be wrong in.
@@ -5395,6 +5506,579 @@
     }
   });
 
+  // ── SITE LIBRARY ─────────────────────────────────────
+  // A job's whole identity used to be one free-text name, so the same lot
+  // measured twice produced two unrelated rows of text. A site is now a
+  // record with an id that outlives any single measurement.
+  //
+  // Sites live under their own key on purpose. writeJobs() drops the oldest
+  // half of the job list when localStorage fills, which is survivable for job
+  // history and destructive for a library someone spent a season building.
+  // Nothing on the job path may write this key.
+  //
+  // The library ships EMPTY. A company's own sites arrive as an import, never
+  // as a constant in here. A company's own list is an import file, and the
+  // repo's docs folder explains where one comes from.
+  const SITES_KEY = 'yardMeasureSites';
+
+  function readSites() {
+    try { return JSON.parse(localStorage.getItem(SITES_KEY)) || []; } catch (e) { return []; }
+  }
+
+  // Deliberately has no trim fallback, unlike writeJobs(). A full quota here
+  // is a real failure the user has to hear about — silently halving the
+  // library would be worse than refusing the write.
+  function writeSites(sites) {
+    try {
+      localStorage.setItem(SITES_KEY, JSON.stringify(sites));
+      return true;
+    } catch (e) {
+      showToast("Couldn't save the site library — storage is full");
+      return false;
+    }
+  }
+
+  function newSiteId() {
+    return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  // Every field is materialised, so a site from an old export and one typed
+  // this morning have the same shape and every reader can stop guarding.
+  function makeSite(fields) {
+    const f = fields || {};
+    const now = Date.now();
+    const str = v => (v == null ? '' : String(v).trim());
+    return {
+      id: f.id || newSiteId(),
+      label: str(f.label),
+      address: str(f.address),
+      // Never derived from the label. Real exported lists put the customer
+      // sometimes as a prefix, sometimes fused into the site name, sometimes
+      // not at all — so a human sets this or it stays empty.
+      customer: str(f.customer),
+      // Generic on purpose: a route, a crew, a city, a snow pod. Whatever the
+      // company groups work by, and it churns season to season, which is why
+      // it is an ordinary editable field and not a fixed vocabulary.
+      group: str(f.group),
+      note: str(f.note),
+      lat: typeof f.lat === 'number' ? f.lat : null,
+      lng: typeof f.lng === 'number' ? f.lng : null,
+      createdAt: f.createdAt || now,
+      updatedAt: f.updatedAt || now,
+    };
+  }
+
+  function getSite(id) {
+    if (!id) return null;
+    return readSites().find(s => s.id === id) || null;
+  }
+
+  function upsertSite(site) {
+    const sites = readSites();
+    const i = sites.findIndex(s => s.id === site.id);
+    if (i >= 0) sites[i] = { ...sites[i], ...site, updatedAt: Date.now() };
+    else sites.unshift(site);
+    writeSites(sites);
+    return site;
+  }
+
+  function deleteSite(id) {
+    writeSites(readSites().filter(s => s.id !== id));
+  }
+
+  // The job-label input is capped at 60 characters, so this is too — a long
+  // label plus a long address must not silently produce a name the input
+  // refuses to hold.
+  function siteJobName(site) {
+    if (!site) return '';
+    return [site.label, site.address].filter(Boolean).join(' — ').slice(0, 60);
+  }
+
+  // Layer 2 of duplicate defence. Field crews type "AVE" one week and
+  // "AVENUE" the next; without this the same lot enters the library twice by
+  // ordinary use. Long forms collapse to the short form because the short
+  // form is what gets typed on a phone.
+  const ADDR_ABBREV = {
+    AVENUE: 'AVE', AV: 'AVE', ROAD: 'RD', STREET: 'ST', HIGHWAY: 'HWY',
+    DRIVE: 'DR', BOULEVARD: 'BLVD', CIRCLE: 'CIR', COURT: 'CT', LANE: 'LN',
+    PLACE: 'PL', PARKWAY: 'PKWY', TERRACE: 'TER', TRAIL: 'TRL', SUITE: 'STE',
+    NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W',
+  };
+
+  function normalizeAddress(s) {
+    if (!s) return '';
+    return String(s).toUpperCase()
+      .replace(/[^A-Z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(w => ADDR_ABBREV[w] || w)
+      .join(' ');
+  }
+
+  // Returns the site to OFFER, never one to merge into — the caller asks a
+  // human. Exact normalised equality only: fuzzy matching would fold 4904 and
+  // 4908 on the same street together, and those are adjacent lots.
+  function findSiteByAddress(addr, excludeId) {
+    const n = normalizeAddress(addr);
+    if (!n) return null;
+    return readSites().find(s => s.id !== excludeId && normalizeAddress(s.address) === n) || null;
+  }
+
+  // Layer 3, and the weakest on purpose. Real route data says proximity
+  // cannot detect duplicates: one customer has six sites on a single street
+  // with two of them adjacent lots, another has eight across two streets. A
+  // radius tight enough to separate neighbours is too tight to survive
+  // ordinary GPS error, and one loose enough to be reliable swallows them. So
+  // this suggests, a human confirms, and siteId records the answer.
+  const SITE_NEAR_M = 40;
+
+  // Reuses the map's own equirectangular projection, anchored on `a`, so this
+  // agrees with every other distance the app computes.
+  function metersBetween(a, b) {
+    const [p, q] = project([a, b], a);
+    return Math.hypot(q.x - p.x, q.y - p.y);
+  }
+
+  function nearestSite(lat, lng, maxM) {
+    let best = null, bestD = Infinity;
+    readSites().forEach(s => {
+      if (typeof s.lat !== 'number' || typeof s.lng !== 'number') return;
+      const d = metersBetween({ lat, lng }, s);
+      if (d < bestD) { bestD = d; best = s; }
+    });
+    return best && bestD <= (maxM == null ? SITE_NEAR_M : maxM) ? { site: best, meters: bestD } : null;
+  }
+
+  // Where a site sits, once something has actually been measured there. Mean
+  // of every drawn pin — a lot's pins ring its edge, so their mean lands in
+  // the middle of it.
+  function jobCentroid() {
+    const pins = state.zones.filter(isDrawn).reduce((acc, z) => acc.concat(z.pins), []);
+    if (!pins.length) return null;
+    return {
+      lat: pins.reduce((s, p) => s + p.lat, 0) / pins.length,
+      lng: pins.reduce((s, p) => s + p.lng, 0) / pins.length,
+    };
+  }
+
+  // The job keeps its free-text name; siteId sits beside it. Nothing that
+  // reads job.name has to change, and a job saved before this feature loads
+  // with siteId null and behaves exactly as it did.
+  function setJobSite(siteId) {
+    const site = getSite(siteId);
+    state.siteId = site ? site.id : null;
+    // Naming is a convenience, never a lock — the name stays freely editable,
+    // and clearing the site does not wipe a name someone already typed.
+    if (site) jobLabelInput.value = siteJobName(site);
+    saveState();
+    syncCurrentJob();
+    renderSiteRow();
+  }
+
+  // A site's coordinates come from the first job measured there, and only
+  // from the first — re-measuring a lot must not walk its pin across the map.
+  // Called from syncCurrentJob(), which runs on every mutation, so the
+  // early return on an already-placed site is what keeps it cheap.
+  function stampSiteLocation() {
+    const site = getSite(state.siteId);
+    if (!site || typeof site.lat === 'number') return;
+    const c = jobCentroid();
+    if (!c) return;
+    upsertSite({ ...site, lat: c.lat, lng: c.lng });
+  }
+
+  // Fires once, on the first pin of an unlinked job — the moment the crew
+  // arrives. Returns whether it linked anything, which is what the console
+  // assertions read. Never links without a yes: proximity suggests, a human
+  // confirms, and siteId records the answer.
+  function maybeOfferNearbySite(lat, lng) {
+    if (state.siteId) return false;
+    const hit = nearestSite(lat, lng, SITE_NEAR_M);
+    if (!hit) return false;
+    const where = [hit.site.address, hit.site.label].filter(Boolean).join(' — ');
+    if (!confirm(`You're about ${Math.round(hit.meters)} m from ${where}.
+
+Start this job at that site?`)) return false;
+    setJobSite(hit.site.id);
+    showToast(`Linked to ${hit.site.label || 'site'}`);
+    return true;
+  }
+
+  // ── SITE LIBRARY UI ──────────────────────────────────
+  const sitesOverlay = document.getElementById('sites-overlay');
+  const siteSearchInput = document.getElementById('site-search');
+  const siteFormWrap = document.getElementById('site-form-wrap');
+  // Which site the open form is editing; null means the form is creating one.
+  let editingSiteId = null;
+
+  function renderSiteRow() {
+    const row = document.getElementById('site-row');
+    const text = document.getElementById('site-row-text');
+    if (!row || !text) return;
+    const site = getSite(state.siteId);
+    row.classList.toggle('linked', !!site);
+    text.textContent = site ? siteJobName(site) : 'Link a site';
+  }
+
+  // Every typed word has to appear somewhere in the record, so a two-word
+  // search finds the row whichever order it is typed — nobody remembers
+  // which half of a site name came first.
+  function siteMatches(s, q) {
+    if (!q) return true;
+    const hay = [s.label, s.address, s.customer, s.group, s.note].join(' ').toLowerCase();
+    return q.toLowerCase().split(/\s+/).filter(Boolean).every(t => hay.includes(t));
+  }
+
+  function renderSites() {
+    const list = document.getElementById('sites-list');
+    const q = siteSearchInput.value.trim();
+    const all = readSites();
+    if (!all.length) {
+      list.innerHTML = '<div class="empty-state">No sites yet — add one, or measure a job and link it</div>';
+      return;
+    }
+    // Grouped first, ungrouped last. Done with an explicit test rather than a
+    // '~' sentinel: localeCompare sorts symbols BEFORE letters, so the
+    // sentinel sank the grouped sites instead of the ungrouped ones.
+    const shown = all.filter(s => siteMatches(s, q))
+      .sort((a, b) => {
+        const ag = a.group || '', bg = b.group || '';
+        if (!ag !== !bg) return ag ? -1 : 1;
+        return ag.localeCompare(bg) || (a.label || '').localeCompare(b.label || '');
+      });
+    if (!shown.length) {
+      list.innerHTML = `<div class="empty-state">Nothing matches “${escapeHtml(q)}”</div>`;
+      return;
+    }
+    list.innerHTML = shown.map(s => {
+      const bits = [];
+      if (s.address) bits.push(escapeHtml(s.address));
+      if (s.customer) bits.push(escapeHtml(s.customer));
+      if (s.group) bits.push(`<span class="job-badge">${escapeHtml(s.group)}</span>`);
+      return `<div class="job-row ${s.id === state.siteId ? 'current' : ''}">
+        <button class="job-open" data-site-pick="${s.id}">
+          <div class="job-name">${escapeHtml(s.label || '(no label)')}${s.id === state.siteId ? ' · this job' : ''}</div>
+          <div class="job-meta">${bits.join(' · ') || 'No address'}</div>
+        </button>
+        <button class="job-act" data-site-edit="${s.id}" title="Edit">${icon('edit')}</button>
+        <button class="job-act" data-site-del="${s.id}" title="Delete">${icon('trash')}</button>
+      </div>`;
+    }).join('');
+  }
+
+  function openSiteForm(site) {
+    editingSiteId = site ? site.id : null;
+    document.getElementById('site-f-label').value = site ? site.label : '';
+    document.getElementById('site-f-address').value = site ? site.address : '';
+    document.getElementById('site-f-customer').value = site ? site.customer : '';
+    document.getElementById('site-f-group').value = site ? site.group : '';
+    document.getElementById('site-f-note').value = site ? site.note : '';
+    siteFormWrap.style.display = '';
+    document.getElementById('site-f-label').focus();
+  }
+
+  function closeSiteForm() {
+    editingSiteId = null;
+    siteFormWrap.style.display = 'none';
+  }
+
+  function openSites() {
+    closeSiteForm();
+    siteSearchInput.value = '';
+    renderSites();
+    sitesOverlay.classList.add('open');
+  }
+
+  function closeSites() {
+    sitesOverlay.classList.remove('open');
+  }
+
+  // Picking a site on a job that has already been measured would silently
+  // re-label someone's work, so an in-progress job is linked in place and only
+  // an empty one starts fresh.
+  function startJobAtSite(siteId) {
+    const site = getSite(siteId);
+    if (!site) return;
+    if (state.zones.some(isDrawn)) {
+      setJobSite(site.id);
+      showToast(`Linked to ${site.label || 'site'}`);
+    } else {
+      syncCurrentJob();
+      startNewJob({ name: siteJobName(site), siteId: site.id });
+      showToast(`Started at ${site.label || 'site'}`);
+    }
+    closeSites();
+    closeJobs();
+  }
+
+  document.getElementById('site-row').addEventListener('click', openSites);
+  document.getElementById('sites-open-btn').addEventListener('click', openSites);
+  document.getElementById('sites-close').addEventListener('click', closeSites);
+  sitesOverlay.addEventListener('click', (e) => { if (e.target.id === 'sites-overlay') closeSites(); });
+  siteSearchInput.addEventListener('input', renderSites);
+  document.getElementById('site-add-btn').addEventListener('click', () => openSiteForm(null));
+  document.getElementById('site-cancel-btn').addEventListener('click', closeSiteForm);
+
+  document.getElementById('site-save-btn').addEventListener('click', () => {
+    const label = document.getElementById('site-f-label').value.trim();
+    const address = document.getElementById('site-f-address').value.trim();
+    if (!label && !address) { showToast('A site needs a label or an address'); return; }
+    const fields = {
+      label, address,
+      customer: document.getElementById('site-f-customer').value.trim(),
+      group: document.getElementById('site-f-group').value.trim(),
+      note: document.getElementById('site-f-note').value.trim(),
+    };
+    // Offer, never merge. A typed address that already exists is far more
+    // often the crew arriving at a known lot than a genuinely new one — but
+    // only a human can say which, and two lots on one street are common.
+    if (!editingSiteId) {
+      const hit = findSiteByAddress(address);
+      if (hit) {
+        const useExisting = confirm(
+          `${hit.label || 'A site'} is already saved at ${hit.address}.\n\n` +
+          `OK to use that one. Cancel to save this as a separate site.`);
+        if (useExisting) {
+          closeSiteForm();
+          startJobAtSite(hit.id);
+          return;
+        }
+        // Cancel means "these really are different lots" — fall through and
+        // save a second record rather than folding them together.
+      }
+    }
+    const wasEditing = !!editingSiteId;
+    const saved = wasEditing
+      ? upsertSite({ ...getSite(editingSiteId), ...fields })
+      : upsertSite(makeSite(fields));
+    closeSiteForm();
+    renderSites();
+    renderSiteRow();
+    showToast(wasEditing ? 'Site updated' : `Saved ${saved.label || 'site'}`);
+  });
+
+  document.getElementById('sites-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-site-pick], button[data-site-edit], button[data-site-del]');
+    if (!btn) return;
+    if (btn.dataset.sitePick) { startJobAtSite(btn.dataset.sitePick); return; }
+    if (btn.dataset.siteEdit) { openSiteForm(getSite(btn.dataset.siteEdit)); return; }
+    if (btn.dataset.siteDel) {
+      const site = getSite(btn.dataset.siteDel);
+      if (!site) return;
+      if (!confirm(`Delete "${site.label || site.address}"? Jobs measured here keep their measurements but lose the link.`)) return;
+      deleteSite(site.id);
+      // Deleting the site you are standing in leaves the measurements alone
+      // and only drops the link.
+      if (state.siteId === site.id) { state.siteId = null; saveState(); }
+      renderSites();
+      renderSiteRow();
+      showToast('Site deleted');
+    }
+  });
+
+  // ── EXPORT / IMPORT ──────────────────────────────────
+  // One mechanism doing three jobs: loading a company's own site list once per
+  // device, moving a library between phones, and handing the data to whoever
+  // asked for it. JSON is the only format that round-trips.
+  const LIBRARY_FORMAT = 'yard-measure-library-1';
+  const APP_VERSION = 'v8';
+
+  function buildLibraryExport(opts) {
+    const o = opts || {};
+    return {
+      format: LIBRARY_FORMAT,
+      appVersion: APP_VERSION,
+      exportedAt: new Date().toISOString(),
+      sites: readSites(),
+      // Jobs carry every pin, so they are opt-in — a library moving between
+      // phones is a few kilobytes and a job history is not.
+      jobs: o.jobs ? readJobs() : [],
+    };
+  }
+
+  // Additive by contract. A site whose id already exists is OFFERED, not
+  // overwritten, because a stale file must never quietly undo a season of
+  // corrections. autoAnswer exists so the console assertions can drive both
+  // branches without a human at the keyboard.
+  function mergeImport(payload, opts) {
+    const o = opts || {};
+    if (!payload || payload.format !== LIBRARY_FORMAT) {
+      throw new Error('That file is not a Yard Measure library export');
+    }
+    const incoming = Array.isArray(payload.sites) ? payload.sites : [];
+    const sites = readSites();
+    const byId = new Map(sites.map(s => [s.id, s]));
+    let added = 0, updated = 0, skipped = 0;
+
+    incoming.forEach(raw => {
+      const site = makeSite(raw);
+      const existing = byId.get(site.id);
+      if (!existing) {
+        sites.unshift(site);
+        byId.set(site.id, site);
+        added++;
+        return;
+      }
+      // Same id, same content is a no-op — this is what makes importing the
+      // same file twice produce 74 sites and not 148.
+      const same = ['label', 'address', 'customer', 'group', 'note']
+        .every(k => existing[k] === site[k]);
+      if (same) return;
+      const answer = o.autoAnswer || (confirm(
+        `"${existing.label || existing.address}" is already saved and the file differs:\n\n` +
+        `  saved:  ${existing.label} · ${existing.address} · ${existing.group || 'no group'}\n` +
+        `  file:   ${site.label} · ${site.address} · ${site.group || 'no group'}\n\n` +
+        `OK to use the file's version. Cancel to keep what is saved.`
+      ) ? 'replace' : 'skip');
+      if (answer === 'replace') {
+        const i = sites.findIndex(s => s.id === site.id);
+        // createdAt belongs to this phone's record, not the file's — the site
+        // has been here since it was first saved here.
+        sites[i] = { ...existing, ...site, createdAt: existing.createdAt, updatedAt: Date.now() };
+        byId.set(site.id, sites[i]);
+        updated++;
+      } else {
+        skipped++;
+      }
+    });
+
+    writeSites(sites);
+
+    // Jobs are additive too, and never replace one already on this phone —
+    // the local copy is the one someone may be standing in.
+    let jobs = 0;
+    if (Array.isArray(payload.jobs) && payload.jobs.length) {
+      const current = readJobs();
+      const have = new Set(current.map(j => j.id));
+      const fresh = payload.jobs.filter(j => j && j.id && !have.has(j.id));
+      jobs = fresh.length;
+      if (jobs) writeJobs(current.concat(fresh).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)));
+    }
+    return { added, updated, skipped, jobs };
+  }
+
+  function downloadText(filename, text, mime) {
+    const blob = new Blob([text], { type: mime || 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // Flat, one row per zone, with site identity repeated on every row so a
+  // spreadsheet can pivot on it. EXPORT ONLY — a CSV cannot carry pin
+  // geometry, and importing one would silently produce sites with no shape.
+  function csvCell(v) {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  const CSV_HEADER = [
+    'site_id', 'site_label', 'site_address', 'site_customer', 'site_group',
+    'site_lat', 'site_lng',
+    'job_id', 'job_name', 'measured_at', 'season',
+    'zone_name', 'zone_mode', 'zone_surface', 'zone_sqft', 'zone_net_sqft',
+    'zone_linear_ft', 'pin_count',
+  ];
+
+  function buildLibraryCsv() {
+    const rows = [CSV_HEADER.join(',')];
+    const jobsBySite = new Map();
+    readJobs().forEach(j => {
+      const k = j.siteId || '';
+      if (!jobsBySite.has(k)) jobsBySite.set(k, []);
+      jobsBySite.get(k).push(j);
+    });
+
+    const emit = (site, job) => {
+      const base = [
+        site ? site.id : '', site ? site.label : '', site ? site.address : '',
+        site ? site.customer : '', site ? site.group : '',
+        site && typeof site.lat === 'number' ? site.lat.toFixed(6) : '',
+        site && typeof site.lng === 'number' ? site.lng.toFixed(6) : '',
+      ];
+      const blankJob = ['', '', '', ''];
+      const blankZone = ['', '', '', '', '', '', ''];
+      if (!job) { rows.push(base.concat(blankJob, blankZone).map(csvCell).join(',')); return; }
+      const jobBits = [job.id, job.name, new Date(job.savedAt).toISOString(), job.season || 'summer'];
+      const zones = (job.zones || []).filter(z => z && z.pins && z.pins.length);
+      if (!zones.length) { rows.push(base.concat(jobBits, blankZone).map(csvCell).join(',')); return; }
+      zones.forEach(z => {
+        rows.push(base.concat(jobBits, [
+          z.name || '',
+          z.mode || 'area',
+          surfaceOf(z),
+          isLine(z) ? '' : Math.round(zoneSqft(z)),
+          isLine(z) || isCut(z) ? '' : Math.round(zoneNetSqft(z)),
+          isLine(z) ? Math.round(zoneLenFt(z)) : '',
+          z.pins.length,
+        ]).map(csvCell).join(','));
+      });
+    };
+
+    // Every site gets a row even if nothing has been measured there yet — the
+    // library is the point, and an unmeasured site is still a real site.
+    readSites().forEach(site => {
+      const js = jobsBySite.get(site.id) || [];
+      if (!js.length) emit(site, null);
+      else js.forEach(j => emit(site, j));
+    });
+    // Jobs measured before anyone linked a site still belong in the file.
+    (jobsBySite.get('') || []).forEach(j => emit(null, j));
+    return rows.join('\n');
+  }
+
+  document.getElementById('site-export-btn').addEventListener('click', () => {
+    const withJobs = confirm('Include measured jobs and their pins?\n\nOK includes them (a much bigger file). Cancel exports sites only.');
+    const payload = buildLibraryExport({ jobs: withJobs });
+    if (!payload.sites.length && !payload.jobs.length) { showToast('Nothing to export yet'); return; }
+    downloadText(`yard-measure-library-${new Date().toISOString().slice(0, 10)}.json`,
+                 JSON.stringify(payload, null, 1), 'application/json');
+    showToast(`Exported ${payload.sites.length} site${payload.sites.length !== 1 ? 's' : ''}`);
+  });
+
+  document.getElementById('site-import-btn').addEventListener('click', () => {
+    document.getElementById('site-import-file').click();
+  });
+
+  document.getElementById('site-import-file').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Cleared straight away so re-picking the same file fires change again.
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let res;
+      try {
+        res = mergeImport(JSON.parse(reader.result));
+      } catch (err) {
+        showToast(err.message || "Couldn't read that file");
+        return;
+      }
+      renderSites();
+      renderSiteRow();
+      const bits = [`${res.added} added`];
+      if (res.updated) bits.push(`${res.updated} updated`);
+      if (res.skipped) bits.push(`${res.skipped} kept as-is`);
+      if (res.jobs) bits.push(`${res.jobs} jobs`);
+      showToast(bits.join(', '));
+    };
+    reader.onerror = () => showToast("Couldn't read that file");
+    reader.readAsText(file);
+  });
+
+  document.getElementById('site-export-csv-btn').addEventListener('click', () => {
+    const csv = buildLibraryCsv();
+    if (csv.split('\n').length < 2) { showToast('Nothing to export yet'); return; }
+    downloadText(`yard-measure-sites-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv');
+    showToast('CSV exported — it opens in a spreadsheet, and cannot be imported back');
+  });
+
   // ── JOB HISTORY ──────────────────────────────────────
   // The app used to hold exactly one job: measuring the next property
   // destroyed the last one, with no way back. Now every job carries an id and
@@ -5434,6 +6118,7 @@
     return {
       id: state.jobId,
       name: jobTitle(),
+      siteId: state.siteId || null,
       started: state.jobStarted,
       savedAt: Date.now(),
       sqft: Math.round(jobSqft()),
@@ -5454,6 +6139,7 @@
   // measured, so half-tapped scratch work doesn't clutter the list.
   function syncCurrentJob() {
     if (!state.zones.some(isDrawn)) return;
+    stampSiteLocation();
     const jobs = readJobs().filter(j => j.id !== state.jobId);
     jobs.unshift(snapshotOfCurrentJob());
     writeJobs(jobs.slice(0, MAX_JOBS));
@@ -5471,6 +6157,9 @@
     setPinsLocked(true);
     state.lastMove = null;
     jobLabelInput.value = seed && seed.name ? seed.name : '';
+    // A duplicated job is the same ground measured again, so it keeps the
+    // site. A brand-new job starts unlinked.
+    state.siteId = (seed && seed.siteId) || null;
     if (seed && seed.zones) {
       state.zones = JSON.parse(JSON.stringify(seed.zones));
       // A duplicated job can be older than every field below — this is a third
@@ -5502,6 +6191,8 @@
     syncCurrentJob();
     state.jobId = job.id;
     state.jobStarted = job.started || job.savedAt;
+    // A job saved before the library has no siteId, and stays unlinked.
+    state.siteId = job.siteId || null;
     state.zones = job.zones || [];
     state.zones.forEach(z => {
       if (!z.mode) z.mode = 'area';
@@ -5597,7 +6288,8 @@
       const job = readJobs().find(j => j.id === btn.dataset.dup);
       if (!job) return;
       syncCurrentJob();
-      startNewJob({ name: `${job.name} (copy)`, zones: job.zones, nextZoneId: job.nextZoneId, nextPinId: job.nextPinId });
+      startNewJob({ name: `${job.name} (copy)`, siteId: job.siteId, zones: job.zones,
+                    nextZoneId: job.nextZoneId, nextPinId: job.nextPinId });
       syncCurrentJob();
       closeJobs();
       showToast('Duplicated — measurements copied');
@@ -5629,6 +6321,8 @@
   // won't appear in the inputs until something else forces a re-render.
   loadFencePrefs();
   const restored = loadState();
+  // Must follow loadState(): the row reads state.siteId, which it restores.
+  renderSiteRow();
   // Must run after loadState(): stickiness only seeds fields the restored job
   // left blank, and must land before the first renderAll() below or the
   // seeded terms won't appear in the inputs until something else re-renders.
