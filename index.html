@@ -1074,6 +1074,49 @@
 
   .btn-primary:not(:disabled):active { background: var(--brand-hi); }
 
+
+  /* LOCATION DISCLOSURE */
+  /* Google Play requires the explanation to appear inside the app immediately
+     before the system permission prompt. A privacy policy link does not
+     satisfy it, and neither does the store listing. Centred rather than a
+     bottom sheet on purpose: this is a consent step, not a drawer, and it is
+     deliberately not dismissible by tapping outside it. */
+  #gps-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  #gps-overlay.open { display: flex; }
+
+  .gps-card {
+    background: var(--light);
+    width: 100%;
+    max-width: 440px;
+    max-height: 88vh;
+    overflow-y: auto;
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: var(--e3);
+  }
+
+  .gps-card h2 { margin: 0 0 12px; font-size: 19px; color: var(--dark); }
+  .gps-card p { margin: 0 0 12px; font-size: 14.5px; line-height: 1.5; color: var(--text); }
+  .gps-card ul { margin: 0 0 14px; padding-left: 20px; }
+  .gps-card li { font-size: 14.5px; line-height: 1.55; color: var(--text); margin-bottom: 5px; }
+  .gps-card .quiet { color: var(--mid); font-size: 13px; }
+  .gps-card a { color: var(--green); }
+  .gps-card .btn-row { margin-top: 4px; }
+
+  /* Only actionable while location is off, so the affordance only appears then. */
+  #status-bar.actionable { cursor: pointer; }
+  .sheet-note a { color: var(--green); }
+
   .btn-secondary {
     background: var(--surface);
     color: var(--brand);
@@ -1546,6 +1589,28 @@
     </button>
     <div id="jobs-list"></div>
     <p class="sheet-note" id="offline-note">Every job saves itself as you measure. Tap one to reopen it.</p>
+    <p class="sheet-note"><a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a> · Your measurements stay on this device</p>
+  </div>
+</div>
+
+<div id="gps-overlay" role="dialog" aria-modal="true" aria-labelledby="gps-dlg-title">
+  <div class="gps-card">
+    <h2 id="gps-dlg-title">Use your location?</h2>
+    <p>Yard Measure uses your location <strong>while the app is open</strong> to:</p>
+    <ul>
+      <li>drop measurement points as you walk a site's corners</li>
+      <li>show where you are on the map</li>
+      <li>work out how accurate each point is</li>
+    </ul>
+    <p>Your location stays on this device. There is no account and no server, so it is
+       never sent to us, and it is never read while the app is closed.</p>
+    <p class="quiet">You do not have to allow it — you can measure by tapping corners on
+       the map instead, and you can turn this on later.
+       <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="gps-decline" type="button">Not now</button>
+      <button class="btn btn-primary" id="gps-accept" type="button">Continue</button>
+    </div>
   </div>
 </div>
 
@@ -2225,6 +2290,67 @@
   });
 
   // ── GPS ──────────────────────────────────────────────
+  // ── LOCATION DISCLOSURE ──────────────────────────────
+  // GPS no longer starts on load. Google Play requires the app to explain what
+  // location is for immediately before the system permission prompt, in the
+  // app itself — the store listing and the privacy policy do not satisfy it.
+  // So the sequence is now: explain, get a yes, then ask the OS.
+  //
+  // Consent is remembered so nobody is asked twice, and a refusal is
+  // reversible from the status bar — otherwise saying "not now" once would
+  // mean reinstalling to get GPS back.
+  const LOCATION_CONSENT_KEY = 'yardMeasureLocationConsent';
+
+  function locationConsent() {
+    try { return localStorage.getItem(LOCATION_CONSENT_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  function setLocationConsent(v) {
+    try { localStorage.setItem(LOCATION_CONSENT_KEY, v); } catch (e) { /* private mode: ask again next time */ }
+  }
+
+  function showLocationDisclosure() {
+    document.getElementById('gps-overlay').classList.add('open');
+  }
+
+  function hideLocationDisclosure() {
+    document.getElementById('gps-overlay').classList.remove('open');
+  }
+
+  // Saying no must leave a usable app and a way back in. Tapping corners on
+  // the imagery is a first-class way to measure, not a consolation prize.
+  function locationOff() {
+    setStatus('Location off — tap here to turn it on, or tap the map to place corners', 'red');
+    document.getElementById('status-bar').classList.add('actionable');
+  }
+
+  // Startup entry point, replacing the old bare startGPS().
+  function initLocation() {
+    const consent = locationConsent();
+    if (consent === 'ok') { startGPS(); return; }
+    if (consent === 'no') { locationOff(); return; }
+    showLocationDisclosure();
+  }
+
+  document.getElementById('gps-accept').addEventListener('click', () => {
+    hideLocationDisclosure();
+    setLocationConsent('ok');
+    document.getElementById('status-bar').classList.remove('actionable');
+    // Only now does the OS prompt appear, which is the whole point of the gate.
+    startGPS();
+  });
+
+  document.getElementById('gps-decline').addEventListener('click', () => {
+    hideLocationDisclosure();
+    setLocationConsent('no');
+    locationOff();
+  });
+
+  document.getElementById('status-bar').addEventListener('click', () => {
+    if (locationConsent() === 'ok') return;
+    showLocationDisclosure();
+  });
+
   function startGPS() {
     if (!navigator.geolocation) {
       setStatus('GPS not available — use "Tap to add" on the map instead', 'red');
@@ -5756,7 +5882,7 @@
   ensureZone();
   renderAll();
   if (restored) showToast('Restored your last job');
-  startGPS();
+  initLocation();
   initMap();
   acquireWakeLock();
   registerServiceWorker();
