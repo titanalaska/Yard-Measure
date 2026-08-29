@@ -1797,11 +1797,11 @@
     // measured, so a summer user who never touches it sees today's app.
     season: 'summer',
     // Fleet and operating practice — these describe how an outfit works, not
-    // a site, so they outlive any one job. Everything here except the pile
-    // height is a judgment call and ships empty on purpose: a number invented
-    // in code reads as fact six months later.
+    // a site, so they outlive any one job. Every one of them is a judgment
+    // call and ships empty on purpose: a number invented in code reads as
+    // fact six months later, and is then quoted back as though it were one.
     snowPrefs: {
-      pileHeightFt: 20,          // the one value here that ships with a default
+      pileHeightFt: '',
       packingFactor: '',
       truckCapacityYd3: '',
       sandRateLbsPer1000: '',
@@ -3554,6 +3554,11 @@
   const MOA_BOUNDS = [-150.09, 60.85, -149.04, 61.47];
   const MSB_BOUNDS = [-151.10, 61.00, -146.40, 62.60];
   const ESRI_TILES = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  // Below this the municipal orthos are worse than useless: Mat-Su's dynamic
+  // service answers any bbox, returning opaque blank where it holds no
+  // imagery, which hid the worldwide base underneath it. Close work happens
+  // far above this anyway.
+  const LOCAL_IMAGERY_MINZOOM = 13;
   const moaTiles = year =>
     `https://www.ancgis.com/arcgis/rest/services/imagery_public/Photo_${year}/MapServer/tile/{z}/{y}/{x}`;
   const msbExport = svc =>
@@ -3592,9 +3597,11 @@
       sources: {
         esri: { type: 'raster', tiles: [ESRI_TILES], tileSize: 256, maxzoom: 19,
                 attribution: 'Esri, Maxar, Earthstar Geographics' },
-        moa:  { type: 'raster', tiles: [moaTiles(cfg.moa)], tileSize: 256, maxzoom: 21,
+        moa:  { type: 'raster', tiles: [moaTiles(cfg.moa)], tileSize: 256,
+                minzoom: LOCAL_IMAGERY_MINZOOM, maxzoom: 21,
                 bounds: MOA_BOUNDS, attribution: 'Municipality of Anchorage' },
-        msb:  { type: 'raster', tiles: [msbExport(cfg.msb)], tileSize: 256, maxzoom: 21,
+        msb:  { type: 'raster', tiles: [msbExport(cfg.msb)], tileSize: 256,
+                minzoom: LOCAL_IMAGERY_MINZOOM, maxzoom: 21,
                 bounds: MSB_BOUNDS, attribution: 'Matanuska-Susitna Borough' },
       },
       layers: [
@@ -3624,12 +3631,102 @@
       (mapTapAccuracyM() * M_TO_FT).toFixed(1)} ft per tapped corner`;
   }
 
+  // ── WHERE THE MAP OPENS ──────────────────────────────
+  // Opening on one fixed city was fine while this was one company's tool. It
+  // is wrong for everyone else, so the opening view is worked out per device.
+  //
+  // Three sources, best first, and none of them touch the network — no IP
+  // lookup, no third-party locator, nothing new to declare on a store
+  // listing, and it all still works with the phone in airplane mode:
+  //
+  //   1. Where this device last left the map. After one GPS fix or one
+  //      address search that is the user's own ground, remembered.
+  //   2. The browser's timezone. Already on the device, costs nothing, and
+  //      puts a first-time user on the right part of the earth even when
+  //      location permission is refused outright.
+  //   3. A wide view — honest about not knowing, rather than asserting a
+  //      city picked for reasons that have nothing to do with this user.
+  //
+  // A real GPS fix still overrides all of it; see updateYouAreHere().
+  const MAP_VIEW_KEY = 'yardMeasureMapView';
+
+  // Deliberately coarse. This only has to land someone in the right region so
+  // that GPS or the address search can finish the job — it is a starting
+  // frame, never an answer. [lng, lat] to match MapLibre's argument order.
+  const TZ_PLACES = {
+    'America/Anchorage': [-149.90, 61.22], 'America/Juneau': [-134.42, 58.30],
+    'America/Nome': [-165.41, 64.50], 'America/Adak': [-176.63, 51.88],
+    'America/Los_Angeles': [-118.24, 34.05], 'America/Boise': [-116.20, 43.62],
+    'America/Denver': [-104.99, 39.74], 'America/Phoenix': [-112.07, 33.45],
+    'America/Chicago': [-87.63, 41.88], 'America/New_York': [-74.01, 40.71],
+    'America/Detroit': [-83.05, 42.33], 'America/Indiana/Indianapolis': [-86.16, 39.77],
+    'Pacific/Honolulu': [-157.86, 21.31],
+    'America/Vancouver': [-123.12, 49.28], 'America/Edmonton': [-113.49, 53.55],
+    'America/Winnipeg': [-97.14, 49.90], 'America/Toronto': [-79.38, 43.65],
+    'America/Halifax': [-63.57, 44.65], 'America/St_Johns': [-52.71, 47.56],
+    'America/Mexico_City': [-99.13, 19.43], 'America/Sao_Paulo': [-46.63, -23.55],
+    'Europe/London': [-0.13, 51.51], 'Europe/Dublin': [-6.26, 53.35],
+    'Europe/Paris': [2.35, 48.86], 'Europe/Berlin': [13.40, 52.52],
+    'Europe/Madrid': [-3.70, 40.42], 'Europe/Rome': [12.50, 41.90],
+    'Europe/Amsterdam': [4.90, 52.37], 'Europe/Stockholm': [18.07, 59.33],
+    'Europe/Oslo': [10.75, 59.91], 'Europe/Helsinki': [24.94, 60.17],
+    'Europe/Warsaw': [21.01, 52.23], 'Europe/Moscow': [37.62, 55.76],
+    'Asia/Tokyo': [139.69, 35.69], 'Asia/Seoul': [126.98, 37.57],
+    'Asia/Shanghai': [121.47, 31.23], 'Asia/Singapore': [103.82, 1.35],
+    'Asia/Kolkata': [77.21, 28.61], 'Asia/Dubai': [55.27, 25.20],
+    'Australia/Sydney': [151.21, -33.87], 'Australia/Melbourne': [144.96, -37.81],
+    'Australia/Brisbane': [153.03, -27.47], 'Australia/Perth': [115.86, -31.95],
+    'Pacific/Auckland': [174.76, -36.85],
+    'Africa/Johannesburg': [28.05, -26.20], 'Africa/Lagos': [3.38, 6.52],
+    'Africa/Cairo': [31.24, 30.04],
+  };
+
+  // Continent fallback for any zone not named above. America leans North
+  // American because that is where this is being used, and it is a zoomed-out
+  // frame either way — not a claim about anybody's whereabouts.
+  const TZ_REGIONS = {
+    America: [-98.6, 39.8], Europe: [10, 50], Asia: [100, 34],
+    Africa: [20, 2], Australia: [134, -25], Pacific: [-160, -15],
+    Atlantic: [-25, 40], Indian: [75, -10],
+  };
+
+  function readMapView() {
+    try {
+      const v = JSON.parse(localStorage.getItem(MAP_VIEW_KEY));
+      if (v && typeof v.lat === 'number' && typeof v.lng === 'number') return v;
+    } catch (e) { /* unreadable is the same as absent */ }
+    return null;
+  }
+
+  function writeMapView(lng, lat, zoom) {
+    try { localStorage.setItem(MAP_VIEW_KEY, JSON.stringify({ lng, lat, zoom })); } catch (e) {}
+  }
+
+  function openingView() {
+    const saved = readMapView();
+    // A remembered view keeps its zoom: the user left it where it was useful.
+    if (saved) return { center: [saved.lng, saved.lat], zoom: saved.zoom > 0 ? saved.zoom : 17 };
+
+    let tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+
+    // Zoom 10 shows a metro area — close enough to recognise, far enough not
+    // to pretend we know the street.
+    if (TZ_PLACES[tz]) return { center: TZ_PLACES[tz], zoom: 10 };
+
+    const region = TZ_REGIONS[tz.split('/')[0]];
+    if (region) return { center: region, zoom: 3 };
+
+    return { center: [0, 20], zoom: 1.5 };
+  }
+
   function initMap() {
     try {
+      const opening = openingView();
       map = new maplibregl.Map({
         container: 'yard-map',
-        center: [-149.9003, 61.2181], // Anchorage, until GPS/search moves it
-        zoom: 17,
+        center: opening.center,
+        zoom: opening.zoom,
         maxZoom: 22,
         style: buildStyle(imageryKey),
         attributionControl: false,
@@ -3640,6 +3737,12 @@
       // Bottom-right: top-right collides with the floating search bar.
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
       map.on('moveend', renderCredit);
+      // Remember where the map was left, so the next launch opens on this
+      // user's own ground instead of a city chosen for someone else.
+      map.on('moveend', () => {
+        const c = map.getCenter();
+        writeMapView(c.lng, c.lat, map.getZoom());
+      });
       map.on('load', () => {
         mapReady = true;
         addShapeLayers();
