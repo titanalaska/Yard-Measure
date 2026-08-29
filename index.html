@@ -2451,6 +2451,9 @@
       if (!ok) return;
     }
 
+    // Only on the first pin of the job — asking again on pin nine would be
+    // noise, and by then the crew has answered the question by measuring.
+    if (!state.zones.some(z => z.pins.length)) maybeOfferNearbySite(avg.lat, avg.lng);
     addPin({ lat: avg.lat, lng: avg.lng, accuracy: avg.accuracy, samples: fixes.length, src: 'gps' }, { fit: true });
     showToast(`Pin ${activeZone().pins.length} dropped (${fixes.length} fix${fixes.length !== 1 ? 'es' : ''} averaged)`);
   });
@@ -5681,6 +5684,23 @@
     const c = jobCentroid();
     if (!c) return;
     upsertSite({ ...site, lat: c.lat, lng: c.lng });
+  }
+
+  // Fires once, on the first pin of an unlinked job — the moment the crew
+  // arrives. Returns whether it linked anything, which is what the console
+  // assertions read. Never links without a yes: proximity suggests, a human
+  // confirms, and siteId records the answer.
+  function maybeOfferNearbySite(lat, lng) {
+    if (state.siteId) return false;
+    const hit = nearestSite(lat, lng, SITE_NEAR_M);
+    if (!hit) return false;
+    const where = [hit.site.address, hit.site.label].filter(Boolean).join(' — ');
+    if (!confirm(`You're about ${Math.round(hit.meters)} m from ${where}.
+
+Start this job at that site?`)) return false;
+    setJobSite(hit.site.id);
+    showToast(`Linked to ${hit.site.label || 'site'}`);
+    return true;
   }
 
   // ── SITE LIBRARY UI ──────────────────────────────────
