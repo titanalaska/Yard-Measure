@@ -1,0 +1,4 @@
+# Vendored third-party builds are shipped byte-for-byte. Git's line-ending
+# conversion would rewrite them on checkout on Windows, producing noisy diffs
+# and a file that no longer matches what was vetted upstream.
+vendor/** -text
