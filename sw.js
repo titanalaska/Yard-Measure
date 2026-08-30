@@ -9,15 +9,15 @@
  *
  *   app shell   network-first  — so a deploy lands immediately when online,
  *                                but the last good copy opens when offline.
- *   libraries   cache-first    — MapLibre is ~900KB and versioned in the URL,
- *                                so it never needs revalidating.
+ *   libraries   cache-first    — MapLibre is ~900KB and vendored into ./vendor/,
+ *                                so it only changes when we swap the file.
  *   map tiles   cache-first    — with a hard cap, because imagery is unbounded
  *                                and would otherwise eat the origin's quota.
  *
  * Bump CACHE_VERSION on deploy; old caches are dropped on activate.
  */
 
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const SHELL_CACHE = `bp-shell-${CACHE_VERSION}`;
 const LIB_CACHE = `bp-lib-${CACHE_VERSION}`;
 const TILE_CACHE = `bp-tiles-${CACHE_VERSION}`;
@@ -25,9 +25,14 @@ const TILE_CACHE = `bp-tiles-${CACHE_VERSION}`;
 // Keep this well under the ~50MB a browser will typically allow an origin.
 const MAX_TILES = 500;
 
-const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png',
+  './vendor/maplibre-gl.js', './vendor/maplibre-gl.css'];
 
-const LIB_HOSTS = ['unpkg.com'];
+// MapLibre used to come from unpkg. It is vendored into ./vendor/ now, so it is
+// same-origin and would otherwise fall through to the network-first shell rule
+// and re-fetch ~940KB on every load. It only changes when we deliberately swap
+// the file, and CACHE_VERSION covers that, so it stays cache-first.
+const LIB_PATH = '/vendor/';
 const TILE_HOSTS = ['www.ancgis.com', 'maps.matsugov.us', 'services.arcgisonline.com'];
 
 self.addEventListener('install', (event) => {
@@ -108,7 +113,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (LIB_HOSTS.includes(url.hostname)) {
+  if (url.origin === self.location.origin && url.pathname.includes(LIB_PATH)) {
     event.respondWith(cacheFirst(req, LIB_CACHE).catch(() => Response.error()));
     return;
   }
