@@ -3698,7 +3698,18 @@
   // coverage. Verified out-of-area behaviour: MOA's cache 404s, and Mat-Su's
   // exportImage returns RGBA with alpha 0 — both fall through to Esri cleanly,
   // so a job that straddles the Muni/Borough line just works.
-  const TOMTOM_API_KEY = 'Uj3etMIVUsO9ZO7Z1TeklWioWSkLs5tY'; // geocoding only
+  // Address search, tried in order. Both are keyless — the previous
+  // implementation used TomTom, which meant shipping an API key in a page
+  // anyone can view source on, and spend against.
+  //
+  // MOA goes first on purpose: it is authoritative for the addresses this app
+  // is actually pointed at, and it knows local quirks a global geocoder has to
+  // guess. Esri only picks up what MOA does not recognise — and Esri already
+  // supplies the fallback imagery, so no new company joins the privacy policy.
+  const GEOCODERS = [
+    { name: 'MOA', url: q => `https://www.ancgis.com/arcgis/rest/services/Locators/MOA_Multirole_Locator/GeocodeServer/findAddressCandidates?f=json&SingleLine=${encodeURIComponent(q)}&maxLocations=1&outSR=4326` },
+    { name: 'Esri', url: q => `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(q)}&maxLocations=1&outSR=4326` }
+  ];
   const MOA_BOUNDS = [-150.09, 60.85, -149.04, 61.47];
   const MSB_BOUNDS = [-151.10, 61.00, -146.40, 62.60];
   const ESRI_TILES = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
@@ -4378,32 +4389,43 @@
     const input = document.getElementById('map-search-input');
     const q = input.value.trim();
     if (!q || !mapReady) return;
-    try {
-      const res = await fetch(`https://api.tomtom.com/search/2/geocode/${encodeURIComponent(q)}.json?key=${TOMTOM_API_KEY}&limit=1`);
-      // A rejected or exhausted key comes back as a 4xx carrying a JSON error
-      // body — not a thrown error, and not an empty result set. Without this
-      // check data.results is undefined and the app reports 'No results found',
-      // blaming the address someone typed for a key that has stopped working.
-      // That is the single most misleading thing it could say, and it is
-      // exactly what a leaked key produces once somebody else burns the quota.
-      if (!res.ok) {
-        showToast(
-          res.status === 401 || res.status === 403
-            ? `Address search unavailable — its key was rejected or is out of quota`
-            : res.status === 429
-              ? 'Address search is busy — try again in a moment'
-              : `Address search failed (HTTP ${res.status})`);
-        return;
+    // Keep the old implementation's most important property: never blame the
+    // address someone typed for a service that is down. `answered` records
+    // whether any geocoder actually replied, so "No results found" is only
+    // said when something looked and genuinely found nothing.
+    let answered = false;
+
+    for (const g of GEOCODERS) {
+      let res;
+      try {
+        res = await fetch(g.url(q));
+      } catch (e) {
+        continue;             // offline, DNS, CORS — let the next one try
       }
-      const data = await res.json();
-      const hit = data.results && data.results[0];
-      if (!hit) { showToast('No results found'); return; }
-      map.flyTo({ center: [hit.position.lon, hit.position.lat], zoom: 19 });
-      showToast(`Jumped to ${(hit.address && hit.address.freeformAddress) || q}`);
+      if (!res.ok) continue;
+      answered = true;
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        continue;
+      }
+      // ArcGIS reports its own failures inside a 200 body rather than a status
+      // code, so a bare res.ok check is not enough to call this a real answer.
+      if (data.error) continue;
+
+      const hit = data.candidates && data.candidates[0];
+      if (!hit || !hit.location) continue;
+
+      // ArcGIS returns x/y, which is lng/lat in that order — not lat/lng.
+      map.flyTo({ center: [hit.location.x, hit.location.y], zoom: 19 });
+      showToast(`Jumped to ${hit.address || q}`);
       input.blur();
-    } catch (e) {
-      showToast('Search failed — check connection');
+      return;
     }
+
+    showToast(answered ? 'No results found' : 'Search failed — check connection');
   }
 
   // ── SNAPSHOT EXPORT ──────────────────────────────────

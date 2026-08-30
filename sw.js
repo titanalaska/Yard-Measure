@@ -17,7 +17,7 @@
  * Bump CACHE_VERSION on deploy; old caches are dropped on activate.
  */
 
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const SHELL_CACHE = `bp-shell-${CACHE_VERSION}`;
 const LIB_CACHE = `bp-lib-${CACHE_VERSION}`;
 const TILE_CACHE = `bp-tiles-${CACHE_VERSION}`;
@@ -105,8 +105,10 @@ self.addEventListener('fetch', (event) => {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
   // Geocoding is a live lookup — a cached answer for a different address would
-  // be worse than an honest failure.
-  if (url.hostname === 'api.tomtom.com') return;
+  // be worse than an honest failure. Note that the MOA geocoder shares a
+  // hostname with the MOA imagery tiles, so this has to match on the path, not
+  // the host, or address searches would be served from the tile cache.
+  if (url.hostname === 'geocode.arcgis.com' || url.pathname.includes('/GeocodeServer/')) return;
 
   if (TILE_HOSTS.includes(url.hostname)) {
     event.respondWith(cacheFirst(req, TILE_CACHE, MAX_TILES).catch(() => Response.error()));
