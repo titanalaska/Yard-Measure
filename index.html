@@ -5273,7 +5273,7 @@
     g.globalAlpha = 1;
 
     const blob = await new Promise(resolve => c.toBlob(resolve, 'image/png', 0.95));
-    const filename = `yard-measure-${jobLabel ? slugify(jobLabel) + '-' : ''}${Date.now()}.png`;
+    const filename = `bootprint-${jobLabel ? slugify(jobLabel) + '-' : ''}${Date.now()}.png`;
     const file = new File([blob], filename, { type: 'image/png' });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -5325,6 +5325,12 @@
   // Field crews walk a property outdoors on a phone browser — a reload,
   // backgrounding, or crash mid-job shouldn't lose the pins/layers already
   // captured, so every mutation is autosaved to localStorage.
+  // The 'yardMeasure' prefix on every storage key below is deliberate and must
+  // stay. It predates the Bootprint rebrand, and renaming a key does not
+  // migrate what is under it — the app would simply stop finding the old value
+  // and start from empty. Every saved job, every snow and fence preference, on
+  // every phone already running this, is filed under these exact strings.
+  // Tidying them up would read as a cosmetic change and land as data loss.
   const STORAGE_KEY = 'yardMeasureState';
   const SNOW_PREFS_KEY = 'yardMeasureSnowPrefs';
 
