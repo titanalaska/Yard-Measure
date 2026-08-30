@@ -3026,8 +3026,30 @@
   // accuracy. NOTE: the old threshold was tuned against accuracy values that
   // were metres being read as feet, making it ~3.3x tighter than intended —
   // this is the same rule expressed in real metres.
+  // Does the printed area actually match the ground the ring encloses?
+  //
+  // Ear clipping walks the ring and partitions the real covered ground, while
+  // the shoelace formula sums signed pieces — so when a shape crosses itself,
+  // the crossed lobes cancel in the shoelace and the two disagree. A bowtie
+  // can shoelace to literally zero while covering hundreds of square metres.
+  //
+  // This is the check that matters, because it measures the consequence rather
+  // than the cause: it asks "is the number I am about to print wrong", not
+  // "how deep was the crossing". Crucially it does not scale with GPS accuracy,
+  // so it behaves the same on a walked site with poor signal as on a tapped
+  // one — the depth test below does not, and that gap let a shape whose area
+  // had collapsed to zero pass without a word.
+  function areaDisagreesWithGround(pins) {
+    if (pins.length < 4) return false;
+    const covered = triangulate(project(pins)).reduce((s, t) => s + polyArea(t), 0);
+    if (covered <= 0) return false;
+    // 2% tolerance absorbs floating-point drift without hiding a real fold.
+    return Math.abs(calcAreaSqm(pins) - covered) > Math.max(0.5, covered * 0.02);
+  }
+
   function isSelfIntersecting(pins) {
     if (pins.length < 4) return false;
+    if (areaDisagreesWithGround(pins)) return true;
     const pts = project(pins);
     const n = pts.length;
     const ccw = (a, b, c) => (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);

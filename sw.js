@@ -17,7 +17,7 @@
  * Bump CACHE_VERSION on deploy; old caches are dropped on activate.
  */
 
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const SHELL_CACHE = `bp-shell-${CACHE_VERSION}`;
 const LIB_CACHE = `bp-lib-${CACHE_VERSION}`;
 const TILE_CACHE = `bp-tiles-${CACHE_VERSION}`;
