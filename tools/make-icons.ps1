@@ -40,6 +40,11 @@ $heel = @(
 # forefoot it read as an eye. The boot print alone is the stronger mark - one
 # shape, high contrast, legible down to a favicon.
 
+function P {
+  param([double]$x, [double]$y, [double]$Scale, [double]$Off)
+  return New-Object System.Drawing.PointF([float](($x - 256) * $Scale + $Off), [float](($y - 256) * $Scale + $Off))
+}
+
 function Get-Points {
   param($Shape, [double]$Scale, [double]$Offset)
   $pts = @()
@@ -92,6 +97,42 @@ function New-Icon {
     [System.Drawing.Drawing2D.FillMode]::Alternate, 0.6)
   $g.FillClosedCurve($brushGold, (Get-Points $heel $scale $off), `
     [System.Drawing.Drawing2D.FillMode]::Alternate, 0.6)
+
+  # Tread. Drawn in the BACKGROUND colour so the channels read as gaps cut
+  # through the rubber rather than lines painted on top of it. They are allowed
+  # to overrun the sole's edge — the background is the same green, so the
+  # overrun is invisible and the alternative (clipping each groove to the sole)
+  # buys nothing.
+  #
+  # Few and thick on purpose. Fine tread turns to mush at 48px, and the
+  # silhouette is the only thing that survives that far down.
+  $penGroove = New-Object System.Drawing.Pen($green, [float](15 * $scale))
+  $penGroove.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $penGroove.EndCap   = [System.Drawing.Drawing2D.LineCap]::Round
+  $penGroove.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+
+  # Stacked chevrons, all pointing toward the toe.
+  #
+  # The first attempt used full-width horizontal channels, which is what a lug
+  # pattern looks like in a photograph — but drawn flat they sliced the sole
+  # into stacked bands and the whole thing read as a hamburger. Chevrons carry
+  # the same "this is a work boot" signal without ever cutting the silhouette
+  # clean across.
+  #
+  # They also do double duty: a chevron is the map symbol for north, so the
+  # mark reads as tread and as survey arrow at once.
+  $chevrons = @(
+    @(206, 156, 256, 116, 306, 156),   # toe
+    @(196, 232, 256, 192, 316, 232),   # forefoot
+    @(212, 400, 256, 370, 300, 400)    # heel
+  )
+  foreach ($c in $chevrons) {
+    $g.DrawLines($penGroove, [System.Drawing.PointF[]]@(
+      (P $c[0] $c[1] $scale $off), (P $c[2] $c[3] $scale $off), (P $c[4] $c[5] $scale $off)
+    ))
+  }
+
+  $penGroove.Dispose()
 
   $out = Join-Path $repo $OutName
   $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
