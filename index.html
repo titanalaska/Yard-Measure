@@ -2154,6 +2154,28 @@
     return pairs;
   }
 
+  // A cut-out bigger than the ground it cuts from is not a hole — it is a
+  // mis-set mode. Tracing a sidewalk or a path as an AREA zone closes the loop
+  // back to the first pin, so instead of a walkway you enclose the whole site,
+  // and a 15-acre "hole" appears on a 2-acre job.
+  //
+  // The job totals survive this: zoneNetSqft floors at zero and a cut only
+  // removes what it actually overlaps. But the zone's own headline still reads
+  // as a real measurement, in the same type as every honest number on screen,
+  // and nothing on the card contradicts it.
+  //
+  // The 2x threshold is deliberately loose. Drawing a cut generously past the
+  // edge of a lot is legitimate and common, so this only fires when the shape
+  // could not possibly be a hole in what is being measured.
+  function oversizedCuts() {
+    const areaTotal = state.zones
+      .filter(z => z.mode === 'area' && z.pins.length >= 3)
+      .reduce((s, z) => s + zoneSqft(z), 0);
+    if (areaTotal <= 0) return [];
+    return state.zones.filter(z =>
+      isCut(z) && z.pins.length >= 3 && zoneSqft(z) > areaTotal * 2);
+  }
+
   function renderZoneTabs() {
     const n = state.zones.length;
     zoneCountEl.textContent = `${n} zone${n !== 1 ? 's' : ''}`;
@@ -2902,11 +2924,17 @@
 
     const orphans = orphanCuts();
     const dblCuts = overlappingCuts();
-    if (orphans.length || dblCuts.length) {
+    // Ordered by how wrong each one is. An oversized cut means the zone is the
+    // wrong mode entirely, so it is said first — the other two are real but
+    // smaller problems within a shape that is at least the right kind.
+    const oversized = oversizedCuts();
+    if (oversized.length || orphans.length || dblCuts.length) {
       cutWarning.style.display = 'block';
-      cutWarning.innerHTML = orphans.length
-        ? `${icon('warn','ic-sm')} ${orphans.map(o => escapeHtml(o.name)).join(', ')} ${orphans.length > 1 ? 'are' : 'is'} set to cut out but ${orphans.length > 1 ? 'sit' : 'sits'} outside every measured area — nothing is being subtracted`
-        : `${icon('warn','ic-sm')} ${dblCuts.map(p => `${escapeHtml(p[0].name)} and ${escapeHtml(p[1].name)}`).join('; ')} overlap each other — the shared part is being subtracted twice`;
+      cutWarning.innerHTML = oversized.length
+        ? `${icon('warn','ic-sm')} ${oversized.map(o => escapeHtml(o.name)).join(', ')} ${oversized.length > 1 ? 'are' : 'is'} bigger than everything being measured, so it cannot be a hole in it — if you traced a path or a sidewalk, set that zone to a run instead of an area`
+        : orphans.length
+          ? `${icon('warn','ic-sm')} ${orphans.map(o => escapeHtml(o.name)).join(', ')} ${orphans.length > 1 ? 'are' : 'is'} set to cut out but ${orphans.length > 1 ? 'sit' : 'sits'} outside every measured area — nothing is being subtracted`
+          : `${icon('warn','ic-sm')} ${dblCuts.map(p => `${escapeHtml(p[0].name)} and ${escapeHtml(p[1].name)}`).join('; ')} overlap each other — the shared part is being subtracted twice`;
     } else {
       cutWarning.style.display = 'none';
     }
