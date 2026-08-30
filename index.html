@@ -2111,11 +2111,63 @@
       .filter(c => c.sqft > 0.5);
   }
 
+  // Area common to EVERY shape passed in, exactly.
+  //
+  // Works by carrying a set of disjoint convex pieces and clipping them
+  // against the next shape's triangles. Both inputs to clipConvex are always
+  // convex — a triangle, or the intersection of convex things — so the clip
+  // stays exact. Disjointness survives too, because a triangulation partitions
+  // its polygon, so the pieces can simply be summed at the end.
+  function intersectAllSqm(pinLists) {
+    if (!pinLists.length) return 0;
+    const ref = pinLists[0][0];
+    let pieces = triangulate(project(pinLists[0], ref));
+    for (let k = 1; k < pinLists.length && pieces.length; k++) {
+      const tris = triangulate(project(pinLists[k], ref));
+      const next = [];
+      for (const p of pieces)
+        for (const t of tris) {
+          const c = clipConvex(p, t);
+          if (c.length >= 3) next.push(c);
+        }
+      pieces = next;
+    }
+    return pieces.reduce((s, p) => s + polyArea(p), 0);
+  }
+
+  // How much of `zone` the cuts remove BETWEEN THEM — ground covered by two
+  // cuts is removed once, not twice.
+  //
+  // Summing each cut's own overlap double-counts wherever cuts overlap each
+  // other, which is why that case used to need a warning. Inclusion-exclusion
+  // removes the need for the user to care: draw a driveway over an apron over
+  // a walkway and the arithmetic still comes out right.
+  //
+  // 2^n subsets, so it is capped. Beyond the cap it falls back to the plain
+  // sum, which over-subtracts — the honest direction to fail, since it
+  // understates the ground you are billing for rather than overstating it, and
+  // overlappingCuts() still raises the warning.
+  const MAX_EXACT_CUTS = 8;
+  function cutRemovedSqft(zone) {
+    const cuts = state.zones.filter(z => isCut(z) && z.pins.length >= 3);
+    if (!cuts.length) return 0;
+    if (cuts.length > MAX_EXACT_CUTS)
+      return cutoutsFor(zone).reduce((s, c) => s + c.sqft, 0);
+
+    let sqm = 0;
+    for (let mask = 1; mask < (1 << cuts.length); mask++) {
+      const subset = [];
+      for (let i = 0; i < cuts.length; i++) if (mask & (1 << i)) subset.push(cuts[i].pins);
+      const sign = subset.length % 2 ? 1 : -1;
+      sqm += sign * intersectAllSqm([zone.pins, ...subset]);
+    }
+    return sqm * 10.7639;
+  }
+
   // Net: what you actually order material for.
   function zoneNetSqft(z) {
     if (isCut(z) || isLine(z)) return 0; // a hole contributes through its parent; a run has no area
-    const cut = cutoutsFor(z).reduce((s, c) => s + c.sqft, 0);
-    return Math.max(0, zoneSqft(z) - cut);
+    return Math.max(0, zoneSqft(z) - cutRemovedSqft(z));
   }
 
   // In summer every area zone is ground being worked, so the plain sum is the
@@ -2143,10 +2195,14 @@
     return state.zones.filter(z => isLine(z) && isDrawn(z)).reduce((s, z) => s + zoneLenFt(z), 0);
   }
 
-  // Two cuts covering the same ground would each be subtracted in full, so the
-  // overlap would come off twice. Flag rather than silently under-count.
+  // Overlapping cuts are handled correctly now — cutRemovedSqft subtracts the
+  // union, so shared ground comes off once and the user never has to think
+  // about it. The only case still worth flagging is past MAX_EXACT_CUTS, where
+  // the exact path is abandoned for the plain sum and the overlap really does
+  // come off twice.
   function overlappingCuts() {
     const cuts = state.zones.filter(z => isCut(z) && z.pins.length >= 3);
+    if (cuts.length <= MAX_EXACT_CUTS) return [];
     const pairs = [];
     for (let i = 0; i < cuts.length; i++)
       for (let j = i + 1; j < cuts.length; j++)
