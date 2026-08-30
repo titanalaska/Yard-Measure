@@ -4389,13 +4389,24 @@
     const input = document.getElementById('map-search-input');
     const q = input.value.trim();
     if (!q || !mapReady) return;
+    // Only ask Anchorage about Anchorage. The imagery layers are already gated
+    // this way, and the geocoder should match: someone measuring a lot in
+    // Florida has no reason to send every address they type to a municipal
+    // server in Alaska, and MOA has nothing useful to say about it anyway.
+    // Esri covers those addresses on its own — it resolves Anchorage too, so
+    // skipping MOA outside the bounds costs nothing but a little precision.
+    const c = map.getCenter();
+    const chain = sourceAt(c.lng, c.lat) === 'moa'
+      ? GEOCODERS
+      : GEOCODERS.filter(g => g.name !== 'MOA');
+
     // Keep the old implementation's most important property: never blame the
     // address someone typed for a service that is down. `answered` records
     // whether any geocoder actually replied, so "No results found" is only
     // said when something looked and genuinely found nothing.
     let answered = false;
 
-    for (const g of GEOCODERS) {
+    for (const g of chain) {
       let res;
       try {
         res = await fetch(g.url(q));
