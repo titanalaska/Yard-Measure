@@ -2478,6 +2478,28 @@
   // Removes the most recently *added* pin, which is not necessarily the last
   // one in the list — inserting a midpoint puts a brand-new pin in the middle.
   // Pin ids increment monotonically, so the highest id is always the newest.
+  // Ctrl+Z / Cmd+Z runs the same path as the Undo button rather than repeating
+  // its logic. Placing corners with a mouse — a parking lot quoted on a laptop
+  // rather than a phone walked in the field — makes a keyboard undo the first
+  // thing a hand reaches for.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'z' && e.key !== 'Z') return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+
+    // Never steal the shortcut from a field being typed in. The site-name box
+    // needs its own undo far more than the map does.
+    const el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+
+    // A dialog on screen owns the interaction; undoing a pin hidden behind it
+    // would change something the user cannot see happen.
+    if (document.querySelector('#jobs-overlay.open, #gps-overlay.open')) return;
+
+    if (undoBtn.disabled) return;
+    e.preventDefault();
+    undoBtn.click();
+  });
+
   undoBtn.addEventListener('click', () => {
     const z = activeZone();
 
