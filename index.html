@@ -4031,6 +4031,14 @@
     });
     map.addLayer({
       id: 'yard-shape-fill', type: 'fill', source: 'yard-shape',
+      // Only polygons. A run is pushed as an open LineString, and without this
+      // the fill layer implicitly closes it and tessellates it — which paints
+      // big pale triangles fanning out from the path across ground nobody
+      // measured. It never touched a number (a run's area is 0 by definition
+      // and its length comes from summing segments), but on screen it reads as
+      // the app inventing a shape, which is worse than useless while someone is
+      // deciding whether to trust it.
+      filter: ['==', ['geometry-type'], 'Polygon'],
       paint: {
         // Red already means "not worked" — a building, a planter, anything cut
         // out — so it stays first and outranks everything. Past that, snow
