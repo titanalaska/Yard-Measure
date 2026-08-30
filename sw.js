@@ -1,4 +1,4 @@
-/* Yard Measure service worker.
+/* Bootprint service worker.
  *
  * The job this does is narrow and worth stating: a crew reaches a site with no
  * signal and needs the app to open anyway. GPS, the area maths, saved jobs and
@@ -17,10 +17,10 @@
  * Bump CACHE_VERSION on deploy; old caches are dropped on activate.
  */
 
-const CACHE_VERSION = 'v7';
-const SHELL_CACHE = `ym-shell-${CACHE_VERSION}`;
-const LIB_CACHE = `ym-lib-${CACHE_VERSION}`;
-const TILE_CACHE = `ym-tiles-${CACHE_VERSION}`;
+const CACHE_VERSION = 'v8';
+const SHELL_CACHE = `bp-shell-${CACHE_VERSION}`;
+const LIB_CACHE = `bp-lib-${CACHE_VERSION}`;
+const TILE_CACHE = `bp-tiles-${CACHE_VERSION}`;
 
 // Keep this well under the ~50MB a browser will typically allow an origin.
 const MAX_TILES = 500;
@@ -45,7 +45,10 @@ self.addEventListener('activate', (event) => {
   const keep = [SHELL_CACHE, LIB_CACHE, TILE_CACHE];
   event.waitUntil(
     caches.keys()
-      .then(names => Promise.all(names.filter(n => n.startsWith('ym-') && !keep.includes(n))
+      // 'ym-' is the old Yard Measure prefix. Anyone who installed before the
+      // rebrand still has those caches, and dropping the prefix from this
+      // filter would strand them in the browser forever.
+      .then(names => Promise.all(names.filter(n => (n.startsWith('bp-') || n.startsWith('ym-')) && !keep.includes(n))
         .map(n => caches.delete(n))))
       .then(() => self.clients.claim())
   );

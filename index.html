@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Yard Measure</title>
+<title>Bootprint</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#2d6a2d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Yard Measure">
+<meta name="apple-mobile-web-app-title" content="Bootprint">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
@@ -1563,7 +1563,7 @@
 
 <header>
   <svg class="ic ic-lg logo"><use href="#i-logo"/></svg>
-  <h1>Yard Measure</h1>
+  <h1>Bootprint</h1>
   <button id="theme-btn" class="hdr-btn" type="button" title="Display mode">
     <svg class="ic"><use href="#i-auto" id="theme-icon"/></svg>
   </button>
@@ -1596,7 +1596,7 @@
 <div id="gps-overlay" role="dialog" aria-modal="true" aria-labelledby="gps-dlg-title">
   <div class="gps-card">
     <h2 id="gps-dlg-title">Use your location?</h2>
-    <p>Yard Measure uses your location <strong>while the app is open</strong> to:</p>
+    <p>Bootprint uses your location <strong>while the app is open</strong> to:</p>
     <ul>
       <li>drop measurement points as you walk a site's corners</li>
       <li>show where you are on the map</li>
@@ -3990,7 +3990,7 @@
     ];
     const missing = EXPECTED_SHAPE_LAYERS.filter(id => !map.getLayer(id));
     if (missing.length) {
-      console.error('Yard Measure: map layers dropped —', missing.join(', '));
+      console.error('Bootprint: map layers dropped —', missing.join(', '));
       showToast(`Map layer problem: ${missing.length} layer${missing.length !== 1 ? 's' : ''} did not load`);
     }
   }
@@ -4673,7 +4673,7 @@
     g.textAlign = 'left';
     g.fillStyle = '#ffffff';
     g.font = `700 44px ${F}`;
-    g.fillText('Yard Measure', 40, 72);
+    g.fillText('Bootprint', 40, 72);
     g.globalAlpha = 0.8;
     g.font = `400 22px ${F}`;
     g.fillText(new Date().toLocaleString(), 40, 112);
@@ -5130,7 +5130,7 @@
     g.fillText(`${allPins.length} corner pins · ${srcNote} · avg ±${Math.round(avgAccFt)} ft`, 40, cursorY);
     g.globalAlpha = 0.6;
     g.font = `400 20px ${F}`;
-    g.fillText('Generated with Yard Measure', 40, cursorY + 36);
+    g.fillText('Generated with Bootprint', 40, cursorY + 36);
     g.globalAlpha = 1;
 
     const blob = await new Promise(resolve => c.toBlob(resolve, 'image/png', 0.95));
@@ -5139,7 +5139,7 @@
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: 'Yard Measure' });
+        await navigator.share({ files: [file], title: 'Bootprint' });
         showToast('Snapshot shared');
         return;
       } catch (e) {

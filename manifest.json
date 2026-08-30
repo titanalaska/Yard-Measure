@@ -1,6 +1,6 @@
 {
-  "name": "Yard Measure",
-  "short_name": "Yard Measure",
+  "name": "Bootprint",
+  "short_name": "Bootprint",
   "description": "Walk or tap out a site and get square footage, material volumes, linear runs, snow quantities and fence post counts.",
   "start_url": "./",
   "scope": "./",

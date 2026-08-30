@@ -1,9 +1,9 @@
-# Getting Yard Measure onto Google Play and the App Store
+# Getting Bootprint onto Google Play and the App Store
 
 **Written:** 2026-08-29
 **Status:** planning — nothing submitted yet
 
-This is the working plan for shipping Yard Measure as a store app. It records what
+This is the working plan for shipping Bootprint as a store app. It records what
 was verified against current store policy, what is already done, and the decisions
 that are yours to make.
 
@@ -51,7 +51,7 @@ Play requires the policy to be in **two** places: the Privacy policy field in Pl
 Console, **and reachable from inside the app**. The listing link alone is not
 sufficient.
 
-- Hosted at: `https://titanalaska.github.io/Yard-Measure/privacy.html` once merged
+- Hosted at: `https://bootprint.app/privacy.html` — live now
 - In-app link: **not yet built** — see "Code work still outstanding"
 
 ### Data safety declaration
@@ -142,7 +142,7 @@ between a 4.2 rejection and an approval.
 **Usage description string** — Apple rejects vague ones. Draft:
 
 > `NSLocationWhenInUseUsageDescription`
-> "Yard Measure uses your location to place measurement points as you walk a site's
+> "Bootprint uses your location to place measurement points as you walk a site's
 > corners, and to show where you are on the map. Your location stays on your device."
 
 Do **not** add `NSLocationAlwaysAndWhenInUseUsageDescription`. The app has no background
