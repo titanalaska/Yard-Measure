@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bootprint — Library Export</title>
+<meta name="theme-color" content="#2d6a2d">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* Same tokens as the app, trimmed to what this page uses, so the export
+     doesn't look like a different product bolted on. */
+  :root {
+    --t-xs: 11px; --t-sm: 13px; --t-md: 15px; --t-lg: 18px; --t-xl: 22px;
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+    --r-sm: 8px; --r-md: 12px; --r-full: 999px;
+    --e1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.07);
+    --e2: 0 2px 10px rgba(0,0,0,.10);
+    --tap: 44px;
+
+    --brand: #2d6a2d; --brand-hi: #3d8c3d;
+    --danger: #c0392b; --danger-wash: #fdf2f1;
+    --info: #1c6fb0; --info-wash: #eef6fd;
+
+    --bg: #f4f5f2; --surface: #ffffff; --surface-2: #fafaf8;
+    --text: #16181a; --text-dim: #5a6169; --text-faint: #9aa1a8;
+    --border: #e3e5e1; --border-strong: #cfd2cd;
+    --on-brand: #ffffff;
+    --brand-surface: #2d6a2d;
+  }
+
+  :root[data-theme="dark"] {
+    --brand-surface: #1b3d1e;
+    --bg: #12140f; --surface: #1c1f1a; --surface-2: #23271f;
+    --text: #eef0ea; --text-dim: #a7b0a3; --text-faint: #6f776c;
+    --border: #2e332a; --border-strong: #414737;
+    --brand: #4f9b4f; --brand-hi: #6cb86c;
+    --danger: #e4705f; --danger-wash: #2e1d1a;
+    --info: #6ab7f5; --info-wash: #16232e;
+    --e1: 0 1px 2px rgba(0,0,0,.4); --e2: 0 2px 10px rgba(0,0,0,.5);
+  }
+
+  :root[data-theme="sun"] {
+    --bg: #ffffff; --surface: #ffffff; --surface-2: #ffffff;
+    --text: #000000; --text-dim: #262b2f; --text-faint: #454c52;
+    --border: #000000; --border-strong: #000000;
+    --brand: #14431a; --brand-hi: #14431a;
+    --danger: #8c1f13; --danger-wash: #ffffff;
+    --info: #0b3f6b; --info-wash: #ffffff;
+    --e1: none; --e2: none;
+    --brand-surface: #0f3314;
+  }
+  :root[data-theme="sun"] .card,
+  :root[data-theme="sun"] .job-row { border: 2px solid #000; }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]):not([data-theme="sun"]) {
+      --brand-surface: #1b3d1e;
+      --bg: #12140f; --surface: #1c1f1a; --surface-2: #23271f;
+      --text: #eef0ea; --text-dim: #a7b0a3; --text-faint: #6f776c;
+      --border: #2e332a; --border-strong: #414737;
+      --brand: #4f9b4f; --brand-hi: #6cb86c;
+      --danger: #e4705f; --danger-wash: #2e1d1a;
+      --info: #6ab7f5; --info-wash: #16232e;
+      --e1: 0 1px 2px rgba(0,0,0,.4); --e2: 0 2px 10px rgba(0,0,0,.5);
+    }
+  }
+
+  body {
+    font: var(--t-md)/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  header {
+    background: var(--brand-surface); color: var(--on-brand);
+    padding: var(--s4); padding-top: max(var(--s4), env(safe-area-inset-top));
+  }
+  header h1 { font-size: var(--t-lg); font-weight: 600; letter-spacing: -.01em; }
+  header p { font-size: var(--t-sm); opacity: .85; margin-top: var(--s1); }
+
+  main { padding: var(--s4); max-width: 720px; margin: 0 auto;
+         padding-bottom: max(var(--s6), env(safe-area-inset-bottom)); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md); box-shadow: var(--e1);
+    padding: var(--s4); margin-bottom: var(--s4);
+  }
+
+  .headline { font-size: var(--t-xl); font-weight: 650; letter-spacing: -.02em; }
+  .unit { font-size: var(--t-sm); font-weight: 500; color: var(--text-dim); }
+  .sub { font-size: var(--t-sm); color: var(--text-dim); margin-top: var(--s2); }
+
+  .stats { display: flex; flex-wrap: wrap; gap: var(--s5); margin-top: var(--s3); }
+  .stat-label { font-size: var(--t-xs); text-transform: uppercase;
+                letter-spacing: .06em; color: var(--text-faint); }
+  .stat-value { font-size: var(--t-lg); font-weight: 600; }
+
+  button {
+    font: inherit; font-weight: 600; cursor: pointer;
+    min-height: var(--tap); width: 100%;
+    border-radius: var(--r-sm); border: 1px solid transparent;
+    padding: var(--s3) var(--s4); margin-bottom: var(--s2);
+  }
+  button:last-child { margin-bottom: 0; }
+  .btn-primary { background: var(--brand); color: var(--on-brand); }
+  .btn-primary:active { background: var(--brand-hi); }
+  .btn-secondary { background: var(--surface-2); color: var(--text);
+                   border-color: var(--border-strong); }
+
+  h2 { font-size: var(--t-sm); text-transform: uppercase; letter-spacing: .06em;
+       color: var(--text-faint); margin: var(--s5) 0 var(--s2); font-weight: 600; }
+
+  .job-row {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-sm); padding: var(--s3);
+    margin-bottom: var(--s2);
+  }
+  .job-name { font-weight: 600; word-break: break-word; }
+  .job-meta { font-size: var(--t-sm); color: var(--text-dim); margin-top: var(--s1); }
+
+  .badge {
+    display: inline-block; font-size: var(--t-xs); font-weight: 600;
+    padding: 2px var(--s2); border-radius: var(--r-full);
+    margin-top: var(--s2); margin-right: var(--s1);
+  }
+  .badge-warn { background: var(--danger-wash); color: var(--danger);
+                border: 1px solid var(--danger); }
+  .badge-info { background: var(--info-wash); color: var(--info);
+                border: 1px solid var(--info); }
+
+  .note { font-size: var(--t-sm); color: var(--text-dim); margin-top: var(--s4);
+          padding-top: var(--s4); border-top: 1px solid var(--border); }
+  .note strong { color: var(--text); }
+
+  .empty { text-align: center; padding: var(--s6) var(--s4); }
+  .empty .headline { color: var(--danger); }
+
+  #toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: max(var(--s5), env(safe-area-inset-bottom));
+    background: var(--text); color: var(--bg);
+    padding: var(--s3) var(--s4); border-radius: var(--r-full);
+    font-size: var(--t-sm); font-weight: 600; box-shadow: var(--e2);
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+    max-width: 90vw; text-align: center;
+  }
+  #toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Library Export</h1>
+  <p>Bootprint &middot; reads your saved jobs so they can be checked on a laptop</p>
+</header>
+
+<main id="main"></main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // Keys owned by the app. This page only ever READS them.
+  var JOBS_KEY    = 'yardMeasureJobs';
+  var STATE_KEY   = 'yardMeasureState';
+  var SNOW_PREFS  = 'yardMeasureSnowPrefs';
+  var FENCE_PREFS = 'yardMeasureFencePrefs';
+  var SNOW_TERMS  = 'yardMeasureSnowTerms';
+
+  function readJSON(k) {
+    var raw;
+    try { raw = localStorage.getItem(k); } catch (e) { return null; }
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+
+  // The app writes theme into its own state blob. Match it so this page
+  // doesn't flash white at someone running the phone dark or in sun mode.
+  var appState = readJSON(STATE_KEY);
+  var theme = appState && appState.theme;
+  if (theme && theme !== 'auto') document.documentElement.setAttribute('data-theme', theme);
+
+  var jobs = readJSON(JOBS_KEY);
+  if (!Array.isArray(jobs)) jobs = [];
+
+  var payload = {
+    schema: 'bootprint-library-export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    origin: location.origin,
+    userAgent: navigator.userAgent,
+    jobCount: jobs.length,
+    jobs: jobs,
+    // The job open in the app may not be filed yet; without this a
+    // measurement taken minutes ago would be missing from the audit.
+    current: appState || null,
+    prefs: {
+      snow: readJSON(SNOW_PREFS),
+      fence: readJSON(FENCE_PREFS),
+      snowTerms: readJSON(SNOW_TERMS)
+    }
+  };
+
+  var json = JSON.stringify(payload, null, 2);
+  var bytes = new Blob([json]).size;
+  // Local date, not toISOString — Alaska runs 8-9 hours behind UTC, so an
+  // evening export would otherwise be stamped with tomorrow's date.
+  var now = new Date();
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var filename = 'bootprint-library-' + now.getFullYear() + '-' +
+    pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '.json';
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  function num(n) { return (Math.round(n) || 0).toLocaleString(); }
+  function size(b) {
+    return b < 1024 ? b + ' B'
+      : b < 1024 * 1024 ? (b / 1024).toFixed(1) + ' KB'
+      : (b / 1024 / 1024).toFixed(1) + ' MB';
+  }
+  function when(ms) {
+    if (!ms) return 'no date';
+    try {
+      return new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (e) { return 'no date'; }
+  }
+
+  // Mirrors the app's own predicates so the counts here mean the same thing
+  // they mean in the app.
+  function isCut(z)  { return !!z && z.mode === 'cut'; }
+  function isLine(z) { return !!z && z.mode === 'line'; }
+  function isDrawn(z) {
+    if (!z || !Array.isArray(z.pins)) return false;
+    return z.pins.length >= (isLine(z) ? 2 : 3);
+  }
+
+  function tally(job) {
+    var zones = Array.isArray(job.zones) ? job.zones.filter(isDrawn) : [];
+    var areas = 0, cuts = 0, pins = 0;
+    zones.forEach(function (z) {
+      if (isCut(z)) cuts++;
+      else if (!isLine(z)) areas++;
+      pins += z.pins.length;
+    });
+    return { areas: areas, cuts: cuts, pins: pins };
+  }
+
+  var totalSqft = jobs.reduce(function (s, j) { return s + (j.sqft || 0); }, 0);
+  var noCut = jobs.filter(function (j) {
+    var t = tally(j);
+    return t.areas > 0 && t.cuts === 0;
+  }).length;
+
+  var main = document.getElementById('main');
+
+  if (!jobs.length && !appState) {
+    main.innerHTML =
+      '<div class="card empty">' +
+        '<div class="headline">Nothing stored here</div>' +
+        '<p class="sub">This browser has no Bootprint data. The library lives on the ' +
+        'device and in the browser you measured with &mdash; open this page there, ' +
+        'from the same place you open the app.</p>' +
+        '<p class="sub">If you use the installed app, open it first, then load ' +
+        '<strong>bootprint.app/export.html</strong> in that same browser.</p>' +
+      '</div>';
+    return;
+  }
+
+  var rows = jobs.map(function (j) {
+    var t = tally(j);
+    // Every part here is generated from numbers, so it is safe as-is; only the
+    // job name comes from typing and it gets escaped.
+    var bits = [];
+    if (j.sqft)  bits.push(num(j.sqft) + ' sq ft');
+    if (j.lenFt) bits.push(num(j.lenFt) + ' ft run');
+    bits.push(t.areas + (t.areas === 1 ? ' shape' : ' shapes'));
+    if (t.cuts)  bits.push(t.cuts + ' cut-out' + (t.cuts === 1 ? '' : 's'));
+    bits.push(t.pins + ' pins');
+
+    var badges = '';
+    if (t.areas > 0 && t.cuts === 0)
+      badges += '<span class="badge badge-warn">No cut-outs drawn</span>';
+    if (j.season && j.season !== 'summer')
+      badges += '<span class="badge badge-info">' + esc(j.season) + '</span>';
+
+    return '<div class="job-row">' +
+        '<div class="job-name">' + esc(j.name || 'Untitled') + '</div>' +
+        '<div class="job-meta">' + when(j.savedAt || j.started) + ' &middot; ' +
+          bits.join(' &middot; ') + '</div>' +
+        badges +
+      '</div>';
+  }).join('');
+
+  var hasCurrent = !!(payload.current && Array.isArray(payload.current.zones)
+    && payload.current.zones.some(isDrawn));
+
+  main.innerHTML =
+    '<div class="card">' +
+      '<div class="headline">' + jobs.length + ' <span class="unit">' +
+        (jobs.length === 1 ? 'saved job' : 'saved jobs') + '</span></div>' +
+      '<div class="stats">' +
+        '<div><div class="stat-label">Total measured</div>' +
+          '<div class="stat-value">' + num(totalSqft) + ' <span class="unit">sq ft</span></div></div>' +
+        '<div><div class="stat-label">No cut-outs</div>' +
+          '<div class="stat-value">' + noCut + '</div></div>' +
+        '<div><div class="stat-label">File size</div>' +
+          '<div class="stat-value">' + size(bytes) + '</div></div>' +
+      '</div>' +
+      '<div style="margin-top:var(--s4)">' +
+        '<button class="btn-primary" id="share" hidden>Share file</button>' +
+        '<button class="btn-primary" id="download">Download file</button>' +
+        '<button class="btn-secondary" id="copy">Copy as text</button>' +
+      '</div>' +
+      '<p class="note">This page only <strong>reads</strong>. It changes nothing and ' +
+      'deletes nothing &mdash; close it and the app is exactly as you left it.</p>' +
+    '</div>' +
+    '<h2>What is in the file</h2>' +
+    rows +
+    (hasCurrent
+      ? '<p class="note">The job open in the app right now is in the file too, ' +
+        'whether or not it has been named.</p>'
+      : '');
+
+  function toast(msg) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('on');
+    setTimeout(function () { el.classList.remove('on'); }, 2400);
+  }
+
+  // Share is the short road from a phone to OneDrive, but a browser can
+  // support sharing text and still refuse file attachments — so the button
+  // only appears once THIS file is known to be shareable.
+  var shareBtn = document.getElementById('share');
+  var shareFile = null;
+  try {
+    shareFile = new File([json], filename, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+      shareBtn.hidden = false;
+      document.getElementById('download').className = 'btn-secondary';
+    }
+  } catch (e) { /* no File constructor: download still works */ }
+
+  shareBtn.addEventListener('click', function () {
+    navigator.share({ files: [shareFile], title: 'Bootprint library' })
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return; // backed out, not a failure
+        toast('Share failed — use Download');
+      });
+  });
+
+  document.getElementById('download').addEventListener('click', function () {
+    var url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    toast('Saved ' + filename);
+  });
+
+  document.getElementById('copy').addEventListener('click', function () {
+    if (!navigator.clipboard) { toast('Clipboard unavailable — use Download'); return; }
+    navigator.clipboard.writeText(json)
+      .then(function () { toast('Copied ' + size(bytes)); })
+      .catch(function () { toast('Copy failed — use Download'); });
+  });
+})();
+</script>
+</body>
+</html>
