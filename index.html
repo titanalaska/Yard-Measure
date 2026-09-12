@@ -347,6 +347,14 @@
     margin-top: 12px;
   }
 
+  /* Sends the whole library to a laptop for checking. It is an <a> rather than
+     a button because it is a real navigation — inside the installed app there
+     is no address bar, so without this there is no way to reach the page. */
+  #export-link {
+    text-decoration: none;
+    margin-top: 12px;
+  }
+
   .job-row {
     background: var(--surface);
     border-radius: 10px;
@@ -1588,6 +1596,9 @@
       <svg class="ic"><use href="#i-install"/></svg> Add to home screen
     </button>
     <div id="jobs-list"></div>
+    <a class="btn btn-secondary" id="export-link" href="./export.html">
+      <svg class="ic"><use href="#i-share"/></svg> Export library
+    </a>
     <p class="sheet-note" id="offline-note">Every job saves itself as you measure. Tap one to reopen it.</p>
     <p class="sheet-note"><a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a> · Your measurements stay on this device</p>
   </div>

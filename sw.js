@@ -17,7 +17,7 @@
  * Bump CACHE_VERSION on deploy; old caches are dropped on activate.
  */
 
-const CACHE_VERSION = 'v14';
+const CACHE_VERSION = 'v15';
 const SHELL_CACHE = `bp-shell-${CACHE_VERSION}`;
 const LIB_CACHE = `bp-lib-${CACHE_VERSION}`;
 const TILE_CACHE = `bp-tiles-${CACHE_VERSION}`;
@@ -25,7 +25,12 @@ const TILE_CACHE = `bp-tiles-${CACHE_VERSION}`;
 // Keep this well under the ~50MB a browser will typically allow an origin.
 const MAX_TILES = 500;
 
-const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png',
+// export.html is in here because the offline fallback below serves index.html
+// for any shell miss — so without a cached copy, tapping Export library with no
+// signal would quietly hand back the app instead of the export page. The
+// library it exports is all local, so the page genuinely works offline.
+const SHELL = ['./', './index.html', './export.html', './manifest.json',
+  './icon-192.png', './icon-512.png',
   './vendor/maplibre-gl.js', './vendor/maplibre-gl.css'];
 
 // MapLibre used to come from unpkg. It is vendored into ./vendor/ now, so it is

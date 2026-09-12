@@ -110,6 +110,17 @@
   .btn-secondary { background: var(--surface-2); color: var(--text);
                    border-color: var(--border-strong); }
 
+  /* Opened from inside the installed app there is no address bar and no tab to
+     close, so the way back has to be on the page itself. */
+  .linkbtn {
+    display: flex; align-items: center; justify-content: center;
+    text-decoration: none; font-weight: 600;
+    min-height: var(--tap); border-radius: var(--r-sm);
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border-strong);
+    padding: var(--s3) var(--s4); margin-top: var(--s2);
+  }
+
   h2 { font-size: var(--t-sm); text-transform: uppercase; letter-spacing: .06em;
        color: var(--text-faint); margin: var(--s5) 0 var(--s2); font-weight: 600; }
 
@@ -269,6 +280,7 @@
         'from the same place you open the app.</p>' +
         '<p class="sub">If you use the installed app, open it first, then load ' +
         '<strong>bootprint.app/export.html</strong> in that same browser.</p>' +
+        '<a class="linkbtn" href="./">Back to Bootprint</a>' +
       '</div>';
     return;
   }
@@ -317,6 +329,7 @@
         '<button class="btn-primary" id="share" hidden>Share file</button>' +
         '<button class="btn-primary" id="download">Download file</button>' +
         '<button class="btn-secondary" id="copy">Copy as text</button>' +
+        '<a class="linkbtn" href="./">Back to Bootprint</a>' +
       '</div>' +
       '<p class="note">This page only <strong>reads</strong>. It changes nothing and ' +
       'deletes nothing &mdash; close it and the app is exactly as you left it.</p>' +
