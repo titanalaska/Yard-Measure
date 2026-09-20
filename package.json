@@ -1,0 +1,19 @@
+{
+  "name": "bootprint",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bootprint - measure sites off aerial imagery. The app itself is index.html; this manifest exists only to run the measurement tests.",
+  "scripts": {
+    "test": "playwright test",
+    "verify-tests": "node tests/mutation-check.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/titanalaska/Yard-Measure.git"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}
