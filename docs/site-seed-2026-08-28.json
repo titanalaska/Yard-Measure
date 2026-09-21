@@ -1,0 +1,750 @@
+{
+ "format": "yard-measure-library-1",
+ "appVersion": "v8",
+ "exportedAt": "2026-08-28T00:00:00.000Z",
+ "source": "Trello board: SNOW ROUTES / PODS",
+ "count": 74,
+ "sites": [
+  {
+   "id": "s-AIRPORT-HEIGHTS-FIRE-COMPLEX-1140-AIRPORT-HEIGHT",
+   "label": "AIRPORT HEIGHTS FIRE COMPLEX",
+   "address": "1140 AIRPORT HEIGHTS DR",
+   "customer": "",
+   "group": "North Anchorage (KT/Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-ANCH-SENIOR-CENTER-1300-E-19TH-AVENUE",
+   "label": "ANCH SENIOR CENTER",
+   "address": "1300 E 19TH AVENUE",
+   "customer": "",
+   "group": "North Anchorage (KT/Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-HICKEL-131-BRAGAW-RED-APPLE",
+   "label": "HICKEL",
+   "address": "131 BRAGAW - RED APPLE",
+   "customer": "",
+   "group": "North Anchorage (KT/Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-MT-VIEW-LIBRARY-120-S-BRAGAW",
+   "label": "MT VIEW LIBRARY",
+   "address": "120 S BRAGAW",
+   "customer": "",
+   "group": "North Anchorage (KT/Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-PARKING-LOT-4036-MT-VIEW-DRIVE",
+   "label": "PARKING LOT",
+   "address": "4036 MT VIEW DRIVE",
+   "customer": "",
+   "group": "North Anchorage (KT/Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-AHFC-ALPINE-TERRACE-8601-8611-8621-8631-PECK",
+   "label": "AHFC - ALPINE TERRACE",
+   "address": "8601, 8611, 8621, 8631 PECK",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-AHFC-CHUGACH-MANOR-1281-E-19TH-AVENUE",
+   "label": "AHFC - CHUGACH MANOR",
+   "address": "1281 E 19TH AVENUE",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-AHFC-CHUGACH-VIEW-1280-E-17TH-AVENUE",
+   "label": "AHFC - CHUGACH VIEW",
+   "address": "1280 E 17TH AVENUE",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-AHFC-PTARMIGAN-PARK-1122-1132-AND-1142-E-19TH-AV",
+   "label": "AHFC - PTARMIGAN PARK",
+   "address": "1122, 1132, AND 1142 E 19TH AVE",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CREA-3737-ARCTIC-BLVD-MIDTOWN-STORAGE",
+   "label": "CREA",
+   "address": "3737 ARCTIC BLVD - MIDTOWN STORAGE",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-1-122-4TH-AVENUE",
+   "label": "FIRE STATION #1",
+   "address": "122 4TH Avenue",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-10-14861-MOUNTAIN-AIR-DRIVE",
+   "label": "FIRE STATION #10",
+   "address": "14861 MOUNTAIN AIR DRIVE",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-12-7920-HOMER-DR",
+   "label": "FIRE STATION #12",
+   "address": "7920 HOMER DR",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-14-4501-CAMPBELL-AIRSTRIP-RD",
+   "label": "FIRE STATION #14",
+   "address": "4501 CAMPBELL AIRSTRIP RD",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-15-11301-SOUTHPORT-DRIVE",
+   "label": "FIRE STATION #15",
+   "address": "11301 SOUTHPORT DRIVE",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-3-430-SOUTH-BRAGAW",
+   "label": "FIRE STATION #3",
+   "address": "430 SOUTH BRAGAW",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-4-4350-MACINNES-TUDOR",
+   "label": "FIRE STATION #4",
+   "address": "4350 MACINNES & TUDOR",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-5-2207-MCRAE-ROAD",
+   "label": "FIRE STATION #5",
+   "address": "2207 MCRAE ROAD",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-6-1301-PATTERSON",
+   "label": "FIRE STATION #6",
+   "address": "1301 Patterson",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-7-3801-W-88TH",
+   "label": "FIRE STATION #7",
+   "address": "3801 W 88TH",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-8-6151-O-MALLEY-ROAD",
+   "label": "FIRE STATION #8",
+   "address": "6151 O'MALLEY ROAD",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-9A-13915-LAKE-OTIS-DEARMOUN",
+   "label": "FIRE STATION #9A",
+   "address": "13915 LAKE OTIS/DEARMOUN",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-HICKEL-160-KLEVIN-EAST-SIDE-STORAGE-DAY-PLOW-CAL",
+   "label": "HICKEL",
+   "address": "160 KLEVIN - EAST SIDE STORAGE (DAY PLOW - CALL OUT)",
+   "customer": "",
+   "group": "POD - 1a MOA FIRE STATIONS - DAY (Alex)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-ANIMAL-CONTROL-SHELTER-4711-ELMORE-RD",
+   "label": "ANIMAL CONTROL SHELTER",
+   "address": "4711 ELMORE RD",
+   "customer": "",
+   "group": "Pod -1 MOA PROPERTIES -",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-APD-HEADQUARTERS-4501-ELMORE-ROAD",
+   "label": "APD HEADQUARTERS",
+   "address": "4501 ELMORE ROAD",
+   "customer": "",
+   "group": "Pod -1 MOA PROPERTIES -",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-EMERGENCY-OPS-CENTER-1305-E-STREET",
+   "label": "Emergency Ops Center",
+   "address": "1305- E Street",
+   "customer": "",
+   "group": "Pod -1 MOA PROPERTIES -",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-HEALTH-HUMAN-SERVICES-825-L-STREET-2-LOTS",
+   "label": "Health & Human Services",
+   "address": "825 L Street (2 lots)",
+   "customer": "",
+   "group": "Pod -1 MOA PROPERTIES -",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-TUDOR-MAINT-BUSH-WASH-3600-MARTIN-LUTHER-KING",
+   "label": "TUDOR MAINT. BUSH WASH",
+   "address": "3600 MARTIN LUTHER KING",
+   "customer": "",
+   "group": "Pod -1 MOA PROPERTIES -",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-TUDOR-TRANSIT-CENTER-3600-MARTIN-LUTHER-KING",
+   "label": "TUDOR TRANSIT CENTER",
+   "address": "3600 MARTIN LUTHER KING",
+   "customer": "",
+   "group": "Pod -1 MOA PROPERTIES -",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-BUILDERS-CHOICE-200-E-100TH-AVENUE",
+   "label": "BUILDERS CHOICE",
+   "address": "200 E 100TH AVENUE",
+   "customer": "",
+   "group": "Pod -3 South Anchorage (KT)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-DELTA-CONSTRUCTORS-351-E-104TH-AVENUE",
+   "label": "DELTA CONSTRUCTORS",
+   "address": "351 E 104TH AVENUE",
+   "customer": "",
+   "group": "Pod -3 South Anchorage (KT)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-GENSCO-501-E-100TH-AVENUE",
+   "label": "GENSCO",
+   "address": "501 E 100TH AVENUE",
+   "customer": "",
+   "group": "Pod -3 South Anchorage (KT)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-MEDLINE-9051-KING-STREET",
+   "label": "MEDLINE",
+   "address": "9051 KING STREET",
+   "customer": "",
+   "group": "Pod -3 South Anchorage (KT)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-SMS-8895-KING-STREET",
+   "label": "SMS",
+   "address": "8895 KING STREET",
+   "customer": "",
+   "group": "Pod -3 South Anchorage (KT)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-TITAN",
+   "label": "Titan",
+   "address": "",
+   "customer": "",
+   "group": "Pod -3 South Anchorage (KT)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-MISD-APD-TRAINING-CENTER-3740-W-DIMOND",
+   "label": "MISD/APD TRAINING CENTER",
+   "address": "3740 W DIMOND",
+   "customer": "",
+   "group": "Pod -4 Dimond (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-NORTHRIM-BANK-8730-OLD-SEWARD-HWY",
+   "label": "NORTHRIM BANK",
+   "address": "8730 OLD SEWARD HWY",
+   "customer": "",
+   "group": "Pod -4 Dimond (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-FIRE-STATION-11-16630-EAGLE-RIVER-ROAD",
+   "label": "FIRE STATION #11",
+   "address": "16630 EAGLE RIVER ROAD",
+   "customer": "",
+   "group": "Pod -8 Eagle River (Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-HICKEL-11901-BUSINESS-BLVD-ER",
+   "label": "HICKEL",
+   "address": "11901 BUSINESS BLVD (ER)",
+   "customer": "",
+   "group": "Pod -8 Eagle River (Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-JUSTIN-WOLLAM-SUBSTATION-16716-FIRE-HOUSE-LANE",
+   "label": "JUSTIN WOLLAM SUBSTATION",
+   "address": "16716 FIRE HOUSE LANE",
+   "customer": "",
+   "group": "Pod -8 Eagle River (Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-SPEEDWAY-73-12139-OLD-GLENN-HWY-ER",
+   "label": "SPEEDWAY - #73",
+   "address": "12139 OLD GLENN HWY (ER)",
+   "customer": "",
+   "group": "Pod -8 Eagle River (Luke)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-SOA-CAMP-CARROLL-AND-BRYANT-AIRFIELD-JBER-BASE",
+   "label": "SOA - CAMP CARROLL AND BRYANT AIRFIELD",
+   "address": "JBER BASE",
+   "customer": "",
+   "group": "Pod -9 JBER",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-3RD-AND-CHRISTENSEN-3RD-AND-CHRISTENSEN",
+   "label": "",
+   "address": "3rd and Christensen",
+   "customer": "",
+   "group": "Pod 1-WALKS ONLY - PROPERTIES",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-ALASKA-FIRE-FIGHTERS-MEMORIAL-5TH-AVE-A-STREET",
+   "label": "Alaska Fire Fighters Memorial",
+   "address": "5th Ave. & A Street",
+   "customer": "",
+   "group": "Pod 1-WALKS ONLY - PROPERTIES",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-GIRDWOOD-LIBRARY",
+   "label": "GIRDWOOD LIBRARY",
+   "address": "",
+   "customer": "",
+   "group": "Pod 1-WALKS ONLY - PROPERTIES",
+   "note": "OPI IS CONFIRMED AS EMPLOYEE ON SITE SPOKE WITH HIM ON 10/12/22",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-PERFORMING-ARTS-CENTER-621-W-6TH-AVE",
+   "label": "Performing Arts Center",
+   "address": "621 W 6th Ave",
+   "customer": "",
+   "group": "Pod 1-WALKS ONLY - PROPERTIES",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-LITHIA-4904-OLD-SEWARD",
+   "label": "LITHIA",
+   "address": "4904 OLD SEWARD",
+   "customer": "",
+   "group": "Pod 10 -Old Seward (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-LITHIA-4908-OLD-SEWARD",
+   "label": "LITHIA",
+   "address": "4908 OLD SEWARD",
+   "customer": "",
+   "group": "Pod 10 -Old Seward (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-LITHIA-5138-OLD-SEWARD",
+   "label": "LITHIA",
+   "address": "5138 OLD SEWARD",
+   "customer": "",
+   "group": "Pod 10 -Old Seward (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-LITHIA-5550-OLD-SEWARD",
+   "label": "LITHIA",
+   "address": "5550 OLD SEWARD",
+   "customer": "",
+   "group": "Pod 10 -Old Seward (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-LITHIA-5400-OLD-SEWARD",
+   "label": "LITHIA",
+   "address": "5400 OLD SEWARD",
+   "customer": "",
+   "group": "Pod 10 -Old Seward (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-LITHIA-9600-OLD-SEWARD",
+   "label": "LITHIA",
+   "address": "9600 OLD SEWARD",
+   "customer": "",
+   "group": "Pod 10 -Old Seward (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-AK-REGIONAL-LAKE-HOOD-OFFICE-4405-LEAR-CT",
+   "label": "AK REGIONAL LAKE HOOD OFFICE",
+   "address": "4405 LEAR CT",
+   "customer": "",
+   "group": "Pod 2 -Airport",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-SULLIVAN-ARENA-1600-GAMBELL",
+   "label": "SULLIVAN ARENA",
+   "address": "1600 GAMBELL",
+   "customer": "",
+   "group": "Pod 2 -Airport",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-TSAIA-NORTH-TERMINAL-4600-POSTMARK-RD",
+   "label": "TSAIA - NORTH TERMINAL",
+   "address": "4600 POSTMARK RD",
+   "customer": "",
+   "group": "Pod 2 -Airport",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-TSAIA-SOUTH-TERMINAL-5000-W-INTERNATIONAL-AIRPOR",
+   "label": "TSAIA - SOUTH TERMINAL",
+   "address": "5000 W INTERNATIONAL AIRPORT RD",
+   "customer": "",
+   "group": "Pod 2 -Airport",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CIHA-CASWELL-COURT-8860-CENTENNIAL-CIRCLE",
+   "label": "CIHA CASWELL COURT",
+   "address": "8860 CENTENNIAL CIRCLE",
+   "customer": "",
+   "group": "Pod 5 -CIHA PROPERTIES (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CIHA-CHICKALOON-LANDING-8901-PECK",
+   "label": "CIHA CHICKALOON LANDING",
+   "address": "8901 PECK",
+   "customer": "",
+   "group": "Pod 5 -CIHA PROPERTIES (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CIHA-EKLUTNA-ESTATES-8850-CENTENNIAL-CIRCLE",
+   "label": "CIHA EKLUTNA ESTATES",
+   "address": "8850 CENTENNIAL CIRCLE",
+   "customer": "",
+   "group": "Pod 5 -CIHA PROPERTIES (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CIHA-KENAITZE-POINTE-8871-CENTENNIAL-CIRCLE",
+   "label": "CIHA KENAITZE POINTE",
+   "address": "8871 CENTENNIAL CIRCLE",
+   "customer": "",
+   "group": "Pod 5 -CIHA PROPERTIES (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CIHA-KNIK-CORNERS-8800-CENTENNIAL-CIRCLE",
+   "label": "CIHA KNIK CORNERS",
+   "address": "8800 CENTENNIAL CIRCLE",
+   "customer": "",
+   "group": "Pod 5 -CIHA PROPERTIES (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CIHA-SALAMATOF-9131-CENTENNIAL",
+   "label": "CIHA SALAMATOF",
+   "address": "9131 CENTENNIAL",
+   "customer": "",
+   "group": "Pod 5 -CIHA PROPERTIES (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CIHA-SALAMATOF-9121-PECK",
+   "label": "CIHA SALAMATOF",
+   "address": "9121 PECK",
+   "customer": "",
+   "group": "Pod 5 -CIHA PROPERTIES (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-CIHA-TYRONEK-TERRACE-9141-PECK-AVENUE",
+   "label": "CIHA TYRONEK TERRACE",
+   "address": "9141 PECK AVENUE",
+   "customer": "",
+   "group": "Pod 5 -CIHA PROPERTIES (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-MC-PROPERTIES-4200-LAKE-OTIS-PARKWAY",
+   "label": "MC PROPERTIES",
+   "address": "4200 LAKE OTIS PARKWAY",
+   "customer": "",
+   "group": "Pod 6 - Midtown (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-NORTHRIM-BANK-2709-SPENARD",
+   "label": "NORTHRIM BANK",
+   "address": "2709 SPENARD",
+   "customer": "",
+   "group": "Pod 6 - Midtown (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-NUVISION-DENALI-CREDIT-UNION-440-E-36TH-AVE-AND-",
+   "label": "NUVISION/DENALI CREDIT UNION",
+   "address": "440 E 36TH AVE AND OVERFLOW PARKING",
+   "customer": "",
+   "group": "Pod 6 - Midtown (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-PTP-IBEW-3333-DENALI-STREET",
+   "label": "PTP - IBEW",
+   "address": "3333 Denali Street",
+   "customer": "",
+   "group": "Pod 6 - Midtown (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-ZJ-LOUSSAC-LIBRARY-3600-DENALI-STREET",
+   "label": "ZJ LOUSSAC LIBRARY",
+   "address": "3600 DENALI STREET",
+   "customer": "",
+   "group": "Pod 6 - Midtown (Themba)",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-1620-STANFORD-1620-STANFORD",
+   "label": "",
+   "address": "1620 STANFORD",
+   "customer": "",
+   "group": "RESIDENTIAL",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-2011-SALEM-CT-2011-SALEM-CT",
+   "label": "",
+   "address": "2011 SALEM CT",
+   "customer": "",
+   "group": "RESIDENTIAL",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-3311-WILEY-POST-3311-WILEY-POST",
+   "label": "",
+   "address": "3311 WILEY POST",
+   "customer": "",
+   "group": "RESIDENTIAL",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-8963-TOLOFF-DR-8963-TOLOFF-DR",
+   "label": "",
+   "address": "8963 TOLOFF DR",
+   "customer": "",
+   "group": "RESIDENTIAL",
+   "note": "",
+   "lat": null,
+   "lng": null
+  },
+  {
+   "id": "s-8921-TOLOFF-DR-8921-TOLOFF-DR",
+   "label": "",
+   "address": "8921 TOLOFF DR",
+   "customer": "",
+   "group": "RESIDENTIAL",
+   "note": "",
+   "lat": null,
+   "lng": null
+  }
+ ],
+ "jobs": []
+}
