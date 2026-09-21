@@ -65,19 +65,31 @@ const MUTATIONS = [
 ];
 
 const original = fs.readFileSync(SOURCE, 'utf8');
+
+// Match the file's own line endings before looking for a mutation.
+//
+// index.html is checked out with CRLF on Windows, but the find strings above
+// are written with bare newlines. Any find that spans more than one line then
+// misses -- and the miss is reported as "the code it patches has moved", which
+// reads like the mutation needs updating when nothing has moved at all. The
+// Earth-radius guard sat unchecked behind exactly that message. It is the only
+// multi-line find in the list, which is why it was the only one affected.
+const EOL = original.includes('\r\n') ? '\r\n' : '\n';
+const eol = (str) => str.split('\r\n').join('\n').split('\n').join(EOL);
+
 let holes = 0;
 
 console.log(`Checking ${MUTATIONS.length} deliberate bugs against the suite.\n`);
 
 for (const m of MUTATIONS) {
-  if (!original.includes(m.find)) {
+  if (!original.includes(eol(m.find))) {
     console.log(`  ?  ${m.name}`);
     console.log(`     SKIPPED -- the code it patches has moved. Update this mutation.\n`);
     holes++;
     continue;
   }
 
-  fs.writeFileSync(MUTANT, original.replace(m.find, m.replace));
+  fs.writeFileSync(MUTANT, original.replace(eol(m.find), eol(m.replace)));
 
   // Run Playwright's CLI through node directly. Going via `npx` fails here:
   // Node on Windows refuses to spawn a .cmd without a shell (EINVAL), and the
