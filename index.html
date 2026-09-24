@@ -1638,6 +1638,9 @@
   <button id="season-btn" class="hdr-btn" type="button" title="Summer / snow season">
     <svg class="ic"><use href="#i-snow"/></svg>
   </button>
+  <button id="lang-btn" class="hdr-btn" type="button" title="Español / English" aria-label="Español / English">
+    <span>ES</span>
+  </button>
   <button id="jobs-btn" class="hdr-btn" type="button" title="Saved jobs">
     <svg class="ic"><use href="#i-jobs"/></svg><span>Jobs</span>
   </button>
@@ -1670,7 +1673,7 @@
 <div id="gps-overlay" role="dialog" aria-modal="true" aria-labelledby="gps-dlg-title">
   <div class="gps-card">
     <h2 id="gps-dlg-title">Use your location?</h2>
-    <p>Bootprint uses your location <strong>while the app is open</strong> to:</p>
+    <p data-es-html="Bootprint usa tu ubicación <strong>mientras la app está abierta</strong> para:">Bootprint uses your location <strong>while the app is open</strong> to:</p>
     <ul>
       <li>drop measurement points as you walk a site's corners</li>
       <li>show where you are on the map</li>
@@ -1678,7 +1681,7 @@
     </ul>
     <p>Your location stays on this device. There is no account and no server, so it is
        never sent to us, and it is never read while the app is closed.</p>
-    <p class="quiet">You do not have to allow it — you can measure by tapping corners on
+    <p class="quiet" data-es-html="No tienes que permitirlo — puedes medir tocando las esquinas en el mapa, y puedes activarlo después. <a href=&quot;privacy.html&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;>Política de privacidad</a>">You do not have to allow it — you can measure by tapping corners on
        the map instead, and you can turn this on later.
        <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
     <div class="btn-row">
@@ -1755,7 +1758,7 @@
 
 <main id="scroll-area">
 <div id="map-wrap">
-  <div id="yard-map"></div>
+  <div id="yard-map" data-no-es></div>
 
   <!-- Controls live on the map, the way every map app does it — this bought
        back two stacked rows of chrome above it. -->
@@ -6737,6 +6740,532 @@ Start this job at that site?`)) return false;
     }
   });
 
+  // ── SPANISH ──────────────────────────────────────────
+  // Everything on screen translates (Matt, 9/23: "full Spanish on everything").
+  // What does NOT is what leaves the phone for a bid: the snapshot image, the
+  // Copy text, and the CSV and library exports. Those are read by estimators and
+  // customers, and a bid should not change language with whoever measured it.
+  //
+  // Built the way Groundwork's is, because the app has no string table to hang
+  // one on: the English is written once, as it always was, and a pass over the
+  // page's TEXT NODES swaps known phrases for Spanish. It never touches data --
+  // zone names, site labels and every measured number are stored exactly as
+  // before. A MutationObserver re-applies the pass whenever the screen changes,
+  // so a toast or a panel built on tap is caught without editing its code.
+  //
+  // Anything missing stays English -- a gap degrades, it never blanks.
+  //
+  // The map canvas is excluded (data-no-es on #yard-map): MapLibre rebuilds its
+  // markers constantly and holds no words worth translating.
+  //
+  // The key sits beside the other yardMeasure* keys and, like them, must never
+  // be renamed -- renaming does not move a value, it abandons it.
+  const LANG_KEY = 'yardMeasureLang';
+  let lang = 'en';
+  try { if (localStorage.getItem(LANG_KEY) === 'es') lang = 'es'; } catch (e) {}
+
+  const ES = {
+    // header, sheets, dialog
+    'Display mode': 'Modo de pantalla',
+    'Summer / snow season': 'Temporada de verano / nieve',
+    'Saved jobs': 'Trabajos guardados',
+    'Jobs': 'Trabajos',
+    'Close': 'Cerrar',
+    'Start a new job': 'Empezar un trabajo nuevo',
+    'Site library': 'Biblioteca de sitios',
+    'Add to home screen': 'Agregar a la pantalla de inicio',
+    'Export library': 'Exportar biblioteca',
+    'Every job saves itself as you measure. Tap one to reopen it.':
+      'Cada trabajo se guarda solo mientras mides. Toca uno para abrirlo otra vez.',
+    'Every job saves itself as you measure. Saved for offline — this will open without signal.':
+      'Cada trabajo se guarda solo mientras mides. Guardado sin conexión — abre aunque no haya señal.',
+    'Privacy policy': 'Política de privacidad',
+    '· Your measurements stay on this device': '· Tus medidas se quedan en este teléfono',
+    'Use your location?': '¿Usar tu ubicación?',
+    'drop measurement points as you walk a site\'s corners': 'poner puntos de medida mientras caminas las esquinas del sitio',
+    'show where you are on the map': 'mostrar dónde estás en el mapa',
+    'work out how accurate each point is': 'calcular qué tan preciso es cada punto',
+    'Your location stays on this device. There is no account and no server, so it is never sent to us, and it is never read while the app is closed.':
+      'Tu ubicación se queda en este teléfono. No hay cuenta ni servidor, así que nunca se nos envía, y nunca se lee con la app cerrada.',
+    'Not now': 'Ahora no',
+    'Continue': 'Continuar',
+    'Search label, address, customer or group': 'Buscar nombre, dirección, cliente o grupo',
+    'Add a site': 'Agregar un sitio',
+    'Label - what the crew calls it': 'Nombre - como le dice la cuadrilla',
+    'Address': 'Dirección',
+    'Customer (optional)': 'Cliente (opcional)',
+    'Group (optional) - route, crew, city': 'Grupo (opcional) - ruta, cuadrilla, ciudad',
+    'Note (optional)': 'Nota (opcional)',
+    'Cancel': 'Cancelar',
+    'Save site': 'Guardar sitio',
+    'Import': 'Importar',
+    'Export CSV (spreadsheet)': 'Exportar CSV (hoja de cálculo)',
+    'Sites stay on this phone. Export the library to move it to another one.':
+      'Los sitios se quedan en este teléfono. Exporta la biblioteca para pasarla a otro.',
+
+    // result bar and warnings
+    'square feet': 'pies cuadrados',
+    'linear feet': 'pies lineales',
+    'Estimated Area': 'Área estimada',
+    ' — Cut-out': ' — Recorte',
+    ' — Run Length': ' — Largo del tramo',
+    'Pins may be out of order — shape crosses itself, area could be wrong':
+      'Los pines pueden estar fuera de orden — la figura se cruza, el área puede estar mal',
+    'Range:': 'Rango:',
+    ' yd of run': ' yd de tramo',
+    ' segments': ' segmentos', ' segment': ' segmento',
+    ' acres': ' acres',
+    ' sq yd': ' yd²',
+    ' ft perimeter': ' ft de perímetro',
+    ' walked − ': ' medido − ',
+    ' sq ft': ' pies²',
+    'Job total': 'Total del trabajo',
+    ' cleared across ': ' limpiados en ',
+    ' of run across ': ' de tramo en ',
+    ' across ': ' en ',
+    ' areas': ' áreas', ' area': ' área',
+    ' cut-outs removed': ' recortes restados', ' cut-out removed': ' recorte restado',
+
+    // status bar and GPS
+    'Waiting for GPS permission…': 'Esperando permiso del GPS…',
+    'Location off — tap here to turn it on, or tap the map to place corners':
+      'Ubicación apagada — toca aquí para prenderla, o toca el mapa para poner esquinas',
+    'GPS not available — use "Tap to add" on the map instead':
+      'GPS no disponible — usa "Tocar para agregar" en el mapa',
+    'Requesting GPS…': 'Pidiendo el GPS…',
+    'EXCELLENT': 'EXCELENTE', 'GOOD': 'BUENO', 'LOW': 'BAJO',
+    'Location denied — you can still tap the map to place corners.':
+      'Ubicación negada — todavía puedes tocar el mapa para poner esquinas.',
+    'GPS signal unavailable. Try moving outside, or tap the map.':
+      'Sin señal de GPS. Prueba afuera, o toca el mapa.',
+    'GPS timed out. Check signal, or tap the map to place corners.':
+      'El GPS tardó demasiado. Revisa la señal, o toca el mapa para poner esquinas.',
+    'GPS error': 'Error de GPS',
+    'GPS signal stale — waiting for update…': 'Señal de GPS vieja — esperando actualización…',
+
+    // map
+    'Search address or job site…': 'Buscar dirección o sitio de trabajo…',
+    'Search': 'Buscar',
+    'Tap the map to add corners': 'Toca el mapa para agregar esquinas',
+    'Place corners with a crosshair': 'Poner esquinas con la mira',
+    'Lock the map': 'Bloquear el mapa',
+    'Map locked — tap to unlock': 'Mapa bloqueado — toca para desbloquear',
+    'Full-screen map': 'Mapa en pantalla completa',
+    'Exit full screen': 'Salir de pantalla completa',
+    'Fit this zone on screen': 'Ajustar esta zona a la pantalla',
+    'Pins locked — tap to move pins': 'Pines bloqueados — toca para moverlos',
+    'Pins movable — tap to lock': 'Pines movibles — toca para bloquear',
+    'Show lot lines': 'Mostrar líneas de lote',
+    'Aerial imagery source': 'Fuente de imagen aérea',
+    'Best available': 'La mejor disponible',
+    'Anchorage 2015 (older)': 'Anchorage 2015 (más vieja)',
+    'Mat-Su 2025 (newest)': 'Mat-Su 2025 (más nueva)',
+    'Place corner': 'Poner esquina',
+    'Drag any numbered pin to nudge a corner.': 'Arrastra cualquier pin numerado para mover una esquina.',
+    'Tap each corner in order. Drag a pin to nudge it.': 'Toca cada esquina en orden. Arrastra un pin para moverlo.',
+    'Drag the map to line up the crosshair, then Place corner':
+      'Arrastra el mapa para alinear la mira, luego Poner esquina',
+    'Crosshair off': 'Mira apagada',
+    'Need at least two pins to fit': 'Se necesitan al menos dos pines para ajustar',
+    'Map locked — it will not pan or zoom': 'Mapa bloqueado — no se mueve ni hace zoom',
+    'Map unlocked': 'Mapa desbloqueado',
+    'Pins locked': 'Pines bloqueados',
+    'Pins can be dragged — lock them again when you are done':
+      'Los pines se pueden arrastrar — bloquéalos otra vez cuando termines',
+    'No results found': 'No se encontró nada',
+    'Search failed — check connection': 'Falló la búsqueda — revisa la conexión',
+
+    // zones and pins
+    'Zones': 'Zonas',
+    'Zone': 'Zona',
+    'Corner Pins': 'Pines de esquina',
+    'Change surface': 'Cambiar superficie',
+    'Mark this run as fence': 'Marcar este tramo como cerca',
+    'Switch between area, cut-out and run': 'Cambiar entre área, recorte y tramo',
+    'Rename': 'Renombrar',
+    'Delete zone': 'Borrar zona',
+    'Delete': 'Borrar',
+    'Edit': 'Editar',
+    'Duplicate': 'Duplicar',
+    'Remove': 'Quitar',
+    'Fence': 'Cerca', 'Run': 'Tramo', 'Runs': 'Tramos',
+    'Plow': 'Máquina', 'Walk': 'Acera', 'Hand': 'A mano', 'Storage': 'Depósito',
+    'machine-cleared': 'limpiado con máquina',
+    'shovel or blower': 'pala o sopladora',
+    'hand-cleared — stairs and anywhere a machine cannot reach':
+      'limpiado a mano — escaleras y donde no llega la máquina',
+    'snow storage — filled, not cleared': 'depósito de nieve — se llena, no se limpia',
+    'New area': 'Nueva área', 'New cut-out': 'Nuevo recorte', 'New run': 'Nuevo tramo',
+    ' — tap the map to outline it': ' — toca el mapa para marcar el contorno',
+    'Zone name': 'Nombre de la zona',
+    'Walk a corner and tap "Drop Pin", or turn on "Tap to add" and tap corners on the map':
+      'Camina a una esquina y toca "Poner pin aquí", o prende "Tocar para agregar" y toca las esquinas en el mapa',
+    'Walk to a corner and tap "Drop Pin"': 'Camina a una esquina y toca "Poner pin aquí"',
+    'map pin': 'pin del mapa',
+    ' fixes avg': ' lecturas promediadas',
+    'Move earlier': 'Mover antes',
+    'Move later': 'Mover después',
+    'Add a point on the next edge': 'Agregar un punto en el siguiente borde',
+    'Pin move undone': 'Movimiento del pin deshecho',
+    'Last pin removed': 'Último pin quitado',
+    'Place two opposite corners first': 'Pon primero dos esquinas opuestas',
+    'Boxed it out': 'Hecho caja',
+    'Rounded it into an oval': 'Hecho óvalo',
+    'Point added on that edge — drag it on the map': 'Punto agregado en ese borde — arrástralo en el mapa',
+    'Link a site': 'Vincular un sitio',
+    'Job name or address (optional)': 'Nombre del trabajo o dirección (opcional)',
+    'Box from 2': 'Caja con 2',
+    'Oval from 2': 'Óvalo con 2',
+    'Undo Pin': 'Deshacer pin',
+    'Clear Zone': 'Borrar zona',
+    'Snapshot': 'Captura',
+    'Copy': 'Copiar',
+    'Drop Pin Here': 'Poner pin aquí',
+
+    // material layers
+    'Material Layers': 'Capas de material',
+    '+ Add Layer': '+ Agregar capa',
+    'Add an item to work out how much to order by the foot': 'Agrega un artículo para calcular cuánto pedir por pie',
+    'Add a layer to calculate material volume': 'Agrega una capa para calcular el volumen de material',
+    'Material (e.g. steel edging)': 'Material (ej. borde de acero)',
+    'Material (e.g. D-1 base)': 'Material (ej. base D-1)',
+    'Depth': 'Profundidad',
+    'inches': 'pulgadas', 'feet': 'pies',
+    '% waste': '% desperdicio',
+    '(layers with density set)': '(capas con densidad)',
+    ' tons': ' toneladas',
+
+    // snow
+    'Snow': 'Nieve',
+    ' linear ft': ' ft lineales',
+    'width ft': 'ancho ft',
+    'Measure a zone and set its surface': 'Mide una zona y define su superficie',
+    ' · set a truck capacity for load counts': ' · pon la capacidad del camión para contar viajes',
+    'Contract: ': 'Contrato: ',
+    'Nothing to clear yet — give the run a width so it counts as area':
+      'Nada que limpiar todavía — dale un ancho al tramo para que cuente como área',
+    'Nothing to clear yet — mark a zone as plow, walk or hand':
+      'Nada que limpiar todavía — marca una zona como máquina, acera o a mano',
+    'Set an event depth and a compaction ratio for a volume': 'Pon la profundidad de la nevada y la compactación para sacar un volumen',
+    'Set an event depth for a volume': 'Pon la profundidad de la nevada para sacar un volumen',
+    'Set a compaction ratio for a volume': 'Pon la compactación para sacar un volumen',
+    ' yd³ to remove': ' yd³ para retirar',
+    ', and the storage above is what can be staged while you work through it':
+      ', y el depósito de arriba es lo que se puede acumular mientras trabajas',
+    ' yd³ of snow': ' yd³ de nieve',
+    'Set a packing factor to check whether it fits': 'Pon el factor de llenado para ver si cabe',
+    'Measure a storage zone to check whether it fits': 'Mide una zona de depósito para ver si cabe',
+    'Fits': 'Cabe',
+    ' of snow into ': ' de nieve en ',
+    ' of snow against ': ' de nieve contra ',
+    ' yd³ of storage': ' yd³ de depósito',
+    'Event depth': 'Profundidad de la nevada',
+    'Compaction': 'Compactación',
+    'how far it packs down — 3 means 12 in of snow packs to 4 in. Dry powder shrinks most, wet snow least':
+      'cuánto se aplasta — 3 quiere decir que 12 in de nieve quedan en 4 in. La nieve seca se aplasta más, la mojada menos',
+    'Pile height (finished, ft)': 'Altura del montón (terminado, ft)',
+    'Packing factor': 'Factor de llenado',
+    'how much of the box the pile fills — flat-topped pile ≈ 0.55, cone ≈ 0.33, ridge ≈ 0.5':
+      'cuánto de la caja llena el montón — montón plano ≈ 0.55, cono ≈ 0.33, cresta ≈ 0.5',
+    'Truck capacity': 'Capacidad del camión',
+    'Ice control rate': 'Dosis de control de hielo',
+    'lb per 1,000 ft²': 'lb por 1,000 ft²',
+    'Removal window': 'Plazo de retiro',
+    'blank if the contract has none': 'en blanco si el contrato no tiene',
+    'Callout trigger': 'Profundidad de activación',
+    'e.g. 3': 'ej. 3', 'e.g. 0.55': 'ej. 0.55',
+
+    // fence
+    'Gate': 'Puerta',
+    'Remove gate': 'Quitar puerta',
+    'Sections': 'Secciones',
+    'Set the post spacing below to get post and section counts':
+      'Pon la separación de postes abajo para contar postes y secciones',
+    'Gate posts': 'Postes de puerta',
+    'Net fence': 'Cerca neta',
+    '+ Gate': '+ Puerta',
+    'Post spacing (on centre)': 'Separación de postes (a centro)',
+    'Concrete per post': 'Concreto por poste',
+    'bags': 'bolsas',
+    'These are remembered for the next job once you set them.':
+      'Esto se recuerda para el siguiente trabajo una vez que lo pongas.',
+
+    // snapshot, copy, theme, install
+    'Could not create snapshot': 'No se pudo crear la captura',
+    'Nothing measured yet': 'Todavía no hay nada medido',
+    'Building snapshot…': 'Creando captura…',
+    'Snapshot shared': 'Captura compartida',
+    'Snapshot saved': 'Captura guardada',
+    'Copied — paste into your bid': 'Copiado — pégalo en tu cotización',
+    'Select and copy, then tap outside': 'Selecciona y copia, luego toca afuera',
+    'Follows your phone': 'Igual que tu teléfono',
+    'Light': 'Claro', 'Dark': 'Oscuro',
+    'Sunlight — high contrast': 'Sol — alto contraste',
+    'Snow season': 'Temporada de nieve',
+    'Summer season': 'Temporada de verano',
+    'Added — open it from your home screen': 'Agregada — ábrela desde tu pantalla de inicio',
+    'Restored your last job': 'Se abrió tu último trabajo',
+
+    // sites
+    'Couldn\'t save the site library — storage is full': 'No se pudo guardar la biblioteca — el almacenamiento está lleno',
+    'No sites yet — add one, or measure a job and link it': 'Todavía no hay sitios — agrega uno, o mide un trabajo y vincúlalo',
+    '(no label)': '(sin nombre)',
+    ' · this job': ' · este trabajo',
+    'No address': 'Sin dirección',
+    'A site needs a label or an address': 'Un sitio necesita nombre o dirección',
+    'Site updated': 'Sitio actualizado',
+    'Site deleted': 'Sitio borrado',
+    'Nothing to export yet': 'Todavía no hay nada que exportar',
+    'Couldn\'t read that file': 'No se pudo leer ese archivo',
+    'That file is not a Yard Measure library export': 'Ese archivo no es una exportación de la biblioteca',
+    'CSV exported — it opens in a spreadsheet, and cannot be imported back':
+      'CSV exportado — se abre en una hoja de cálculo, y no se puede volver a importar',
+
+    // jobs
+    'No saved jobs yet — measure something and it lands here': 'Todavía no hay trabajos guardados — mide algo y aparece aquí',
+    ' ft run': ' ft de tramo',
+    ' · open now': ' · abierto ahora',
+    'New job started': 'Trabajo nuevo empezado',
+    'Duplicated — measurements copied': 'Duplicado — medidas copiadas',
+    'Job deleted': 'Trabajo borrado',
+    'Untitled — ': 'Sin nombre — ',
+  };
+
+  // Where Spanish word order differs, or a count sits in the middle. These run
+  // BEFORE the phrase pass, on the English -- the phrase pass would otherwise
+  // have turned "Storage holds" half Spanish before a rule could see it. The
+  // phrase pass then tidies whatever English a rule carried through, like a
+  // surface noun or a zone still called "Zone 2".
+  const plural = (n, one, many) => (Number(String(n).replace(/,/g, '')) === 1 ? one : many);
+  const ES_RULES = [
+    [/^"(.+)" is a fence line — posts and gates$/, '"$1" es una línea de cerca — postes y puertas'],
+    [/^"(.+)" is a plain run — measured by the foot$/, '"$1" es un tramo simple — se mide por pie'],
+    [/^"(.+)" now cuts out of whatever contains it$/, '"$1" ahora se resta de lo que lo contiene'],
+    [/^"(.+)" is now a run — measured by the foot$/, '"$1" ahora es un tramo — se mide por pie'],
+    [/^"(.+)" now adds area$/, '"$1" ahora suma área'],
+    [/^Delete "(.+)" and its pins\?$/, '¿Borrar "$1" y sus pines?'],
+    [/^GPS accuracy is low \(±(\d+) ft\)\. This pin may throw off the area a lot\. Drop it anyway\?$/,
+      'La precisión del GPS es baja (±$1 ft). Este pin puede desviar mucho el área. ¿Ponerlo de todos modos?'],
+    [/^Pin (\d+) dropped \((\d+) fix(?:es)? averaged\)$/, (m, p, n) => `Pin ${p} puesto (${n} ${plural(n, 'lectura promediada', 'lecturas promediadas')})`],
+    [/^Clear all pins, layers, and gate openings in "(.+)"\?$/, '¿Borrar todos los pines, capas y puertas de "$1"?'],
+    [/^Clear all pins and layers in "(.+)"\?$/, '¿Borrar todos los pines y capas de "$1"?'],
+    [/^Corner (\d+) placed$/, 'Esquina $1 puesta'],
+    [/^Jumped to (.+)$/, 'Se movió a $1'],
+    [/^Imagery: (.+) · here ≈ (.+) ft per tapped corner$/, 'Imagen: $1 · aquí ≈ $2 ft por esquina tocada'],
+    [/^Map layer problem: (\d+) layers? did not load$/, 'Problema en el mapa: no cargaron $1 capa(s)'],
+    [/^(.+) (?:is|are) bigger than everything being measured, so it cannot be a hole in it — if you traced a path or a sidewalk, set that zone to a run instead of an area$/,
+      '$1: es más grande que todo lo medido, así que no puede ser un hueco — si trazaste un camino o una acera, cambia esa zona a tramo en vez de área'],
+    [/^(.+) (?:is|are) set to cut out but sits? outside every measured area — nothing is being subtracted$/,
+      '$1: marcado para restar pero queda fuera de toda área medida — no se está restando nada'],
+    [/^(.+) overlap each other — the shared part is being subtracted twice$/,
+      '$1: se enciman — la parte compartida se está restando dos veces'],
+    [/^(.+): ([\d,]+) items? over ([\d,]+) ft of run$/, (m, z, n, f) => `${z}: ${n} ${plural(n, 'artículo', 'artículos')} en ${f} ft de tramo`],
+    [/^([\d,]+) ft to order \(longest item, incl\. waste\)$/, '$1 ft para pedir (el artículo más largo, con desperdicio)'],
+    [/^(\d+) runs? (?:have|has) no width set — linear feet only, no area$/,
+      (m, n) => `${n} ${plural(n, 'tramo', 'tramos')} sin ancho — solo pies lineales, sin área`],
+    [/^Storage holds (.+)$/, 'El depósito aguanta $1'],
+    // The separators survive translateString()'s trim only as "· ", never " · ".
+    [/· ([\d,]+) loads? to empty$/, (m, n) => `· ${n} ${plural(n, 'viaje', 'viajes')} para vaciarlo`],
+    [/^([\d,]+) ft² at (.+?) ft, (.+?) packed/, '$1 ft² a $2 ft, $3 de llenado'],
+    [/^([\d,]+) ft² of storage — set a pile height to see what it holds$/,
+      '$1 ft² de depósito — pon la altura del montón para ver cuánto aguanta'],
+    [/^([\d,]+) ft² of storage — set a packing factor to see what it holds$/,
+      '$1 ft² de depósito — pon el factor de llenado para ver cuánto aguanta'],
+    [/(\S+)" callout/g, '$1" de activación'],
+    [/remove within (\S+) hr/g, 'retirar en $1 hr'],
+    [/· ([\d,]+) loads?$/, (m, n) => `· ${n} ${plural(n, 'viaje', 'viajes')}`],
+    [/^Contract removal within (\S+) hr — it leaves whether or not it fits/,
+      'El contrato pide retirarla en $1 hr — se va quepa o no'],
+    [/^Over by (.+)$/, 'Se pasa por $1'],
+    [/^Ice control: (.+) tons per application$/, 'Control de hielo: $1 toneladas por aplicación'],
+    [/^Posts — (\d+) end, (\d+) corner, (\d+) line$/, 'Postes — $1 de extremo, $2 de esquina, $3 de línea'],
+    [/^([\d,]+) posts \+ ([\d,]+) gate posts$/, '$1 postes + $2 postes de puerta'],
+    [/^([\d,]+) posts$/, '$1 postes'],
+    [/^· ([\d,]+) sections$/, '· $1 secciones'],
+    [/^([\d,]+) end · ([\d,]+) corner · ([\d,]+) line · ([\d,]+) gate$/,
+      '$1 de extremo · $2 de esquina · $3 de línea · $4 de puerta'],
+    [/^([\d,]+) ft of fence(?:, ([\d,]+) gates? \((.+) ft\))?$/, (m, f, g, w) =>
+      `${f} ft de cerca` + (g ? `, ${g} ${plural(g, 'puerta', 'puertas')} (${w} ft)` : '')],
+    [/^Concrete: (\d+) bags$/, 'Concreto: $1 bolsas'],
+    [/^You're about (\d+) m from (.+)\.\s+Start this job at that site\?$/,
+      'Estás a unos $1 m de $2.\n\n¿Empezar este trabajo en ese sitio?'],
+    [/^Linked to (.+)$/, 'Vinculado a $1'],
+    [/^Started at (.+)$/, 'Empezado en $1'],
+    // Not "Saved jobs", the sheet title, which the phrase table owns.
+    [/^Saved (?!jobs$)(.+)$/, 'Guardado: $1'],
+    [/^Opened (.+)$/, 'Abierto: $1'],
+    [/^Nothing matches “(.*)”$/, 'Nada coincide con “$1”'],
+    [/^(.+) is already saved at (.+)\.\s+OK to use that one\. Cancel to save this as a separate site\.$/,
+      '$1 ya está guardado en $2.\n\nAceptar para usar ese. Cancelar para guardar este como un sitio aparte.'],
+    [/^Delete "(.+)"\? Jobs measured here keep their measurements but lose the link\.$/,
+      '¿Borrar "$1"? Los trabajos medidos aquí conservan sus medidas pero pierden el vínculo.'],
+    [/^Include measured jobs and their pins\?\s+OK includes them \(a much bigger file\)\. Cancel exports sites only\.$/,
+      '¿Incluir los trabajos medidos y sus pines?\n\nAceptar los incluye (un archivo mucho más grande). Cancelar exporta solo los sitios.'],
+    [/^Exported (\d+) sites?$/, (m, n) => `${plural(n, 'Se exportó', 'Se exportaron')} ${n} ${plural(n, 'sitio', 'sitios')}`],
+    [/\b(\d+) added\b/, '$1 agregados'], [/\b(\d+) updated\b/, '$1 actualizados'],
+    [/\b(\d+) kept as-is\b/, '$1 sin cambio'], [/\b(\d+) jobs\b/, '$1 trabajos'],
+    [/^"(.+)" is already saved and the file differs:/, '"$1" ya está guardado y el archivo es diferente:'],
+    [/OK to use the file's version\. Cancel to keep what is saved\.$/,
+      'Aceptar para usar la versión del archivo. Cancelar para quedarte con lo guardado.'],
+    [/^Delete "(.+)"\? This can't be undone\.$/, '¿Borrar "$1"? No se puede deshacer.'],
+    // After "already saved" and the other quoted sentences, which it would swallow.
+    [/^"(.+)" is (.+)$/, '"$1" es $2'],
+    // Any bare count, anywhere: "3 zones", "1 pin", "2 layers". Last, so the
+    // sentences above that carry a count are matched whole first.
+    [/\b(\d[\d,]*) (zone|pin|layer|item|run)(s?)\b/g, (m, n, w) => `${n} ${plural(n,
+      { zone: 'zona', pin: 'pin', layer: 'capa', item: 'artículo', run: 'tramo' }[w],
+      { zone: 'zonas', pin: 'pines', layer: 'capas', item: 'artículos', run: 'tramos' }[w])}`],
+  ];
+
+  const ES_KEYS = Object.keys(ES).sort((a, b) => b.length - a.length);
+  const escRe = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // One alternation, with word anchors on any key that begins or ends on a
+  // letter or digit -- so "Run" can never eat the front of "Runs", or "Zone"
+  // the front of "Zones". Longest first, so a full phrase beats a piece of it.
+  const ES_RE = new RegExp(ES_KEYS.map(k =>
+    (/^[A-Za-z0-9]/.test(k) ? '\\b' : '') + escRe(k) + (/[A-Za-z0-9]$/.test(k) ? '\\b' : '')).join('|'), 'g');
+
+  // Whitespace is collapsed first: the markup wraps sentences across lines,
+  // and the page shows them collapsed, so that is the text a key has to match.
+  function translateString(v) {
+    const lead = /^\s/.test(v) ? ' ' : '', trail = /\s$/.test(v) ? ' ' : '';
+    const s = String(v).replace(/\s+/g, ' ').trim();
+    if (!s) return v;
+    let out = s;
+    ES_RULES.forEach(([re, to]) => { out = out.replace(re, to); });
+    out = out.replace(ES_RE, m => ES[m]);
+    return out === s ? v : lead + out + trail;
+  }
+  // For dialogs and anything else that is a string, never a node. Keeps line
+  // breaks, which confirm() relies on and translateString() collapses.
+  function tr(s) {
+    if (lang !== 'es' || s == null) return s;
+    const whole = translateString(String(s).replace(/\n+/g, ' '));
+    return whole === String(s).replace(/\n+/g, ' ') ? String(s) : whole;
+  }
+
+  const ES_ORIG = new WeakMap();
+  const ES_ATTRS = ['placeholder', 'title', 'aria-label'];
+  const ES_SKIP = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1 };
+
+  function translateText(node) {
+    const v = node.nodeValue;
+    if (!v || !v.trim()) return;
+    const rec = ES_ORIG.get(node);
+    if (rec && v === rec.es) return;
+    const es = translateString(v);
+    if (es === v) return;
+    ES_ORIG.set(node, { en: v, es });
+    node.nodeValue = es;
+  }
+  function translateAttrs(el) {
+    if (!el.getAttribute) return;
+    ES_ATTRS.forEach(a => {
+      const v = el.getAttribute(a);
+      if (!v) return;
+      const key = 'esOrig' + a.replace(/-./g, m => m[1].toUpperCase());
+      if (el.dataset[key + 'Es'] === v) return;
+      const es = translateString(v);
+      if (es === v) return;
+      el.dataset[key] = v;
+      el.dataset[key + 'Es'] = es;
+      el.setAttribute(a, es);
+    });
+  }
+  function translateBlock(el) {
+    if (el.dataset.esShown === '1') return;
+    el.dataset.enHtml = el.innerHTML;
+    el.innerHTML = el.dataset.esHtml;
+    el.dataset.esShown = '1';
+  }
+  function skipped(n) {
+    const p = n.nodeType === 1 ? n : n.parentNode;
+    return !p || !!ES_SKIP[p.nodeName] || !!(p.closest && p.closest('[data-no-es]'));
+  }
+  function translateNode(root) {
+    if (lang !== 'es' || !root) return;
+    if (root.nodeType === 3) { if (!skipped(root)) translateText(root); return; }
+    if (root.nodeType !== 1 || skipped(root)) return;
+    if (root.dataset.esHtml !== undefined) translateBlock(root);
+    root.querySelectorAll('[data-es-html]').forEach(translateBlock);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT,
+      { acceptNode: n => (skipped(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    nodes.forEach(translateText);
+    translateAttrs(root);
+    // Attributes are checked for data-no-es only: a textarea's TEXT is skipped,
+    // but its placeholder is ours and translates like any other.
+    root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(el => { if (!el.closest('[data-no-es]')) translateAttrs(el); });
+  }
+  function restoreEnglish() {
+    document.querySelectorAll('[data-es-shown]').forEach(el => {
+      el.innerHTML = el.dataset.enHtml;
+      delete el.dataset.esShown;
+    });
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) {
+      const rec = ES_ORIG.get(n);
+      if (rec && n.nodeValue === rec.es) n.nodeValue = rec.en;
+    }
+    document.querySelectorAll('*').forEach(el => {
+      ES_ATTRS.forEach(a => {
+        const key = 'esOrig' + a.replace(/-./g, m => m[1].toUpperCase());
+        if (el.dataset && el.dataset[key] !== undefined && el.getAttribute(a) === el.dataset[key + 'Es']) {
+          el.setAttribute(a, el.dataset[key]);
+        }
+      });
+    });
+  }
+
+  // The observer pauses while it writes, so its own changes never call it back.
+  let esObserver = null;
+  function observeBody() {
+    esObserver.observe(document.body, { childList: true, subtree: true, characterData: true,
+                                        attributes: true, attributeFilter: ES_ATTRS });
+  }
+  function watchForSpanish() {
+    if (esObserver || typeof MutationObserver !== 'function') return;
+    esObserver = new MutationObserver(list => {
+      if (lang !== 'es') return;
+      esObserver.disconnect();
+      list.forEach(m => {
+        if (m.type === 'characterData') { if (!skipped(m.target)) translateText(m.target); }
+        else if (m.type === 'attributes') { if (!m.target.closest('[data-no-es]')) translateAttrs(m.target); }
+        else m.addedNodes.forEach(translateNode);
+      });
+      observeBody();
+    });
+    observeBody();
+  }
+
+  // confirm() and prompt() take a string, not a node, so the pass cannot reach
+  // them. Wrapped once here rather than at each of their call sites.
+  const nativeConfirm = window.confirm.bind(window);
+  const nativePrompt = window.prompt.bind(window);
+  window.confirm = msg => nativeConfirm(tr(msg));
+  window.prompt = (msg, def) => nativePrompt(tr(msg), def);
+
+  const langBtn = document.getElementById('lang-btn');
+  function paintLangBtn() {
+    // The button names the language it switches TO, like Inventory's.
+    langBtn.querySelector('span').textContent = lang === 'es' ? 'EN' : 'ES';
+    langBtn.classList.toggle('active', lang === 'es');
+    document.documentElement.lang = lang;
+  }
+  function setLang(next) {
+    lang = next === 'es' ? 'es' : 'en';
+    try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+    if (lang !== 'es') restoreEnglish();
+    paintLangBtn();
+    renderAll();
+    renderSites && document.getElementById('sites-overlay').classList.contains('open') && renderSites();
+    translateNode(document.body);
+  }
+  langBtn.addEventListener('click', () => setLang(lang === 'es' ? 'en' : 'es'));
+
   // ── TOAST ────────────────────────────────────────────
   function showToast(msg) {
     const t = document.getElementById('toast');
@@ -6776,6 +7305,10 @@ Start this job at that site?`)) return false;
   syncBarHeights();
   ensureZone();
   renderAll();
+  // Before the first toast, so "Restored your last job" is caught too.
+  paintLangBtn();
+  watchForSpanish();
+  translateNode(document.body);
   if (restored) showToast('Restored your last job');
   initLocation();
   initMap();

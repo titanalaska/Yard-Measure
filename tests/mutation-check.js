@@ -62,6 +62,56 @@ const MUTATIONS = [
     replace: '.filter(() => true)',
     caughtBy: 'storage is excluded from the headline',
   },
+
+  // --- Spanish ---
+  {
+    name: 'remember the language under a different key, so it is forgotten',
+    find: "const LANG_KEY = 'yardMeasureLang';",
+    replace: "const LANG_KEY = 'bootprintLang';",
+    caughtBy: 'Spanish is remembered',
+  },
+  {
+    name: 'leave the static markup in Spanish after switching back',
+    find: "    if (lang !== 'es') restoreEnglish();",
+    replace: '',
+    caughtBy: 'switching back restores',
+  },
+  {
+    name: 'let the bid text follow the screen into Spanish',
+    find: '  function jobSummaryText() {',
+    replace: '  function jobSummaryText() { return tr(jobSummaryTextEn()); }\n  function jobSummaryTextEn() {',
+    caughtBy: 'bid text stays English',
+  },
+  {
+    name: 'store the Spanish name on a new zone',
+    find: '      name: name || `Zone ${state.nextZoneId - 1}`,',
+    replace: '      name: name || tr(`Zone ${state.nextZoneId - 1}`),',
+    caughtBy: 'zone keeps the name',
+  },
+  {
+    name: 'stop translating confirm dialogs',
+    find: '  window.confirm = msg => nativeConfirm(tr(msg));',
+    replace: '',
+    caughtBy: 'confirm dialog arrives in Spanish',
+  },
+  {
+    name: 'skip a textarea placeholder along with its text',
+    find: "if (!el.closest('[data-no-es]')) translateAttrs(el); });",
+    replace: 'if (!skipped(el)) translateAttrs(el); });',
+    caughtBy: 'textarea placeholder translates',
+  },
+  {
+    name: 'drop the word anchors, so "Run" turns "Runway" into "Tramoway"',
+    find: "(/^[A-Za-z0-9]/.test(k) ? '\\\\b' : '') + escRe(k) + (/[A-Za-z0-9]$/.test(k) ? '\\\\b' : '')",
+    replace: 'escRe(k)',
+    caughtBy: 'longest phrase wins',
+  },
+  {
+    name: 'swap single words in before the sentence rules see the English',
+    find: '    let out = s;\n    ES_RULES.forEach(([re, to]) => { out = out.replace(re, to); });\n    out = out.replace(ES_RE, m => ES[m]);',
+    replace: '    let out = s.replace(ES_RE, m => ES[m]);\n    ES_RULES.forEach(([re, to]) => { out = out.replace(re, to); });',
+    caughtBy: 'longest phrase wins',
+  },
 ];
 
 const original = fs.readFileSync(SOURCE, 'utf8');
