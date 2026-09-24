@@ -58,12 +58,15 @@ test('the bid text stays English on a Spanish screen', async ({ page }) => {
 test('a zone keeps the name it was given; only the screen reads Spanish', async ({ page }) => {
   await spanishFirst(page);
   await loadApp(page);
+  // Added through "+ Zona", which names it by default. The first zone is
+  // named "Zone 1" explicitly at start-up and would not exercise that path.
+  await page.click('.zone-chip.add');
   const r = await page.evaluate(() => ({
-    stored: state.zones[0].name,
-    shown: document.querySelector('.zone-pick span').textContent,
+    stored: state.zones[1].name,
+    shown: document.querySelectorAll('.zone-pick span')[2].textContent,
   }));
-  expect(r.stored).toBe('Zone 1');
-  expect(r.shown).toBe('Zona 1');
+  expect(r.stored).toBe('Zone 2');
+  expect(r.shown).toBe('Zona 2');
 });
 
 test('the measured number is the same in both languages', async ({ page }) => {
