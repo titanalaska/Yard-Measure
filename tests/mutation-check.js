@@ -112,6 +112,44 @@ const MUTATIONS = [
     replace: '    let out = s.replace(ES_RE, m => ES[m]);\n    ES_RULES.forEach(([re, to]) => { out = out.replace(re, to); });',
     caughtBy: 'longest phrase wins',
   },
+  // Laptop shortcuts (10/4/26). The four guards passed before a single
+  // shortcut existed, so only these prove they guard anything.
+  {
+    name: 'let a held-down key repeat the shortcut',
+    find: "    if (e.repeat) return true;                              // held down: one zone, not twenty\n",
+    replace: '',
+    caughtBy: 'holding N down',
+  },
+  {
+    name: 'run shortcuts under Ctrl, Alt and Cmd',
+    find: "    if (e.ctrlKey || e.altKey || e.metaKey) return true;    // the browser's own shortcuts\n",
+    replace: '',
+    caughtBy: 'Ctrl and Alt combinations',
+  },
+  {
+    name: 'run shortcuts while typing in a box',
+    find: "    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ||\n               el.tagName === 'SELECT' || el.isContentEditable)) return true;\n",
+    replace: '',
+    caughtBy: 'stays a letter',
+  },
+  {
+    name: 'run shortcuts behind an open dialog',
+    find: "    if (document.querySelector('#jobs-overlay.open, #gps-overlay.open, #sites-overlay.open')) return true;\n",
+    replace: '',
+    caughtBy: 'past an open dialog',
+  },
+  {
+    name: 'stop [ and ] at the ends instead of wrapping',
+    find: 'const next = ids[(i + dir + ids.length) % ids.length];',
+    replace: 'const next = ids[Math.max(0, Math.min(ids.length - 1, i + dir))];',
+    caughtBy: 'wrapping at the ends',
+  },
+  {
+    name: 'let W on an area do nothing at all',
+    find: "    if (!box) { showToast('Select a line to set its width'); return; }",
+    replace: '    if (!box) return;',
+    caughtBy: 'W on an area',
+  },
 ];
 
 const original = fs.readFileSync(SOURCE, 'utf8');

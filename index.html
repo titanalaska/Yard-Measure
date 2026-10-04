@@ -1565,6 +1565,32 @@
   .acc-poor { background: var(--danger-wash); color: var(--danger); }
 
   /* toast */
+  /* Laptop shortcut list (?). Same dark glass as the toast, but it stays put
+     until dismissed, and sits above the full-screen map. */
+  #shortcut-help {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.88);
+    color: white;
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-size: 14px;
+    z-index: 101;
+    max-width: calc(100vw - 32px);
+  }
+  #shortcut-help[hidden] { display: none; }
+  #shortcut-help h3 { margin: 0 0 8px; font-size: 15px; }
+  #shortcut-help dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 14px;
+    margin: 0;
+  }
+  #shortcut-help dt { font-weight: 700; font-family: ui-monospace, monospace; }
+  #shortcut-help dd { margin: 0; }
+
   #toast {
     position: fixed;
     bottom: 80px;
@@ -1939,6 +1965,24 @@
 </div>
 
 <div id="toast"></div>
+
+<div id="shortcut-help" hidden role="dialog" aria-label="Keyboard shortcuts">
+  <h3>Keyboard shortcuts</h3>
+  <dl>
+    <dt>N</dt><dd>New zone</dd>
+    <dt>A</dt><dd>Add corners / move map</dd>
+    <dt>Ctrl+Z</dt><dd>Undo</dd>
+    <dt>T</dt><dd>Shape: area, cut-out, line</dd>
+    <dt>S</dt><dd>Surface</dd>
+    <dt>R</dt><dd>Rename zone</dd>
+    <dt>W</dt><dd>Width of a line</dd>
+    <dt>[ ]</dt><dd>Previous / next zone</dd>
+    <dt>F</dt><dd>Fit zone on screen</dd>
+    <dt>M</dt><dd>Full-screen map</dd>
+    <dt>P</dt><dd>Save snapshot</dd>
+    <dt>?</dt><dd>Show or hide this list</dd>
+  </dl>
+</div>
 
 <script>
   // A job is a list of zones (front bed, back lawn, gravel pad…). Each zone
@@ -4380,6 +4424,77 @@
     if (e.key === 'Escape' && state.mapFull) setMapFull(false);
   });
 
+  // ── KEYBOARD SHORTCUTS ───────────────────────────────
+  // Tracing a snow site on the laptop meant leaving the map for every new
+  // zone, shape type and surface (Matt, 10/4/26). Each key presses the button
+  // a finger would, so a shortcut can never behave differently from the tap —
+  // same toast, same save, same rules. Phones have no keyboard, so PMs see
+  // nothing new. There is deliberately no Delete key: deleting stays a tap.
+  const shortcutHelp = document.getElementById('shortcut-help');
+
+  // A key that must stay what it is. Shift is allowed: ? is Shift+/.
+  function shortcutsBlocked(e) {
+    if (e.repeat) return true;                              // held down: one zone, not twenty
+    if (e.ctrlKey || e.altKey || e.metaKey) return true;    // the browser's own shortcuts
+    const el = document.activeElement;                      // a name, a width, the search
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ||
+               el.tagName === 'SELECT' || el.isContentEditable)) return true;
+    // A dialog owns the screen; changing a zone behind it is invisible.
+    if (document.querySelector('#jobs-overlay.open, #gps-overlay.open, #sites-overlay.open')) return true;
+    return false;
+  }
+
+  function pressChipAct(act) {
+    const btn = zoneTabs.querySelector(`.zone-chip.active [data-act="${act}"]`);
+    if (btn) btn.click();
+  }
+
+  // Same path as tapping a chip, so the map fits and the choice is saved.
+  function stepZone(dir) {
+    const ids = state.zones.map(z => z.id);
+    if (ids.length < 2) return;
+    const i = ids.indexOf(state.activeZoneId);
+    const next = ids[(i + dir + ids.length) % ids.length];
+    const pick = zoneTabs.querySelector(`.zone-chip[data-zone="${next}"] .zone-pick`);
+    if (pick) pick.click();
+  }
+
+  function focusWidth() {
+    const z = activeZone();
+    const box = isLine(z) && snowWidthsEl.querySelector(`.snow-width-input[data-zone-id="${z.id}"]`);
+    if (!box) { showToast('Select a line to set its width'); return; }
+    box.scrollIntoView({ block: 'center' });
+    box.focus();
+    box.select();
+  }
+
+  function toggleShortcutHelp(show) {
+    shortcutHelp.hidden = !(show === undefined ? shortcutHelp.hidden : show);
+  }
+
+  const SHORTCUTS = {
+    n: () => zoneTabs.querySelector('[data-act="add"]').click(),
+    a: () => tapModeBtn.click(),
+    t: () => pressChipAct('mode'),
+    s: () => pressChipAct('surface'),
+    r: () => pressChipAct('rename'),
+    w: focusWidth,
+    '[': () => stepZone(-1),
+    ']': () => stepZone(1),
+    f: () => fitBtn.click(),
+    m: () => fullBtn.click(),
+    p: () => { if (!snapshotBtn.disabled) snapshotBtn.click(); },
+    '?': () => toggleShortcutHelp(),
+  };
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !shortcutHelp.hidden) { toggleShortcutHelp(false); return; }
+    const run = e.key && e.key.length === 1 && SHORTCUTS[e.key.toLowerCase()];
+    if (!run || shortcutsBlocked(e)) return;
+    e.preventDefault();
+    run();
+  });
+
   // ── CROSSHAIR PLACEMENT ──────────────────────────────
   // Aiming with a fingertip has two problems: the finger covers the corner,
   // and precision is limited by how big a fingertip is. Dragging the map under
@@ -6772,6 +6887,20 @@ Start this job at that site?`)) return false;
     'Jobs': 'Trabajos',
     'Close': 'Cerrar',
     'Start a new job': 'Empezar un trabajo nuevo',
+    // keyboard shortcut list (?) — the keys themselves stay as typed
+    'Keyboard shortcuts': 'Atajos de teclado',
+    'New zone': 'Zona nueva',
+    'Add corners / move map': 'Agregar esquinas / mover el mapa',
+    'Undo': 'Deshacer',
+    'Shape: area, cut-out, line': 'Forma: área, recorte, línea',
+    'Surface': 'Superficie',
+    'Rename zone': 'Renombrar zona',
+    'Width of a line': 'Ancho de una línea',
+    'Previous / next zone': 'Zona anterior / siguiente',
+    'Fit zone on screen': 'Ajustar la zona en pantalla',
+    'Save snapshot': 'Guardar captura',
+    'Show or hide this list': 'Mostrar u ocultar esta lista',
+    'Select a line to set its width': 'Elige una línea para poner su ancho',
     'Site library': 'Biblioteca de sitios',
     'Add to home screen': 'Agregar a la pantalla de inicio',
     'Export library': 'Exportar biblioteca',
