@@ -1498,6 +1498,18 @@
   /* MapLibre paints its own attribution block; ours lives under the map. */
   .maplibregl-ctrl-attrib { display: none !important; }
 
+  /* The compass. MapLibre's needle carries no letter, and "red means north"
+     is not something a crew should have to know -- so the tip says N. The
+     whole icon turns with the map about its centre, so the needle is centred
+     on 14.5,14.5 and spins in place while the N rides round the top, as on a
+     dial; a needle off-centre swung out sideways when the map turned. It
+     sits on MapLibre's white button in every theme, which is what keeps it
+     readable over a dark aerial at night. Same selector as maplibre-gl.css,
+     later in the page, so this one wins. */
+  .maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath fill='%23c0392b' d='M11.75 7.5v-6h1.4l2.7 3.8V1.5h1.4v6h-1.4l-2.7-3.8v3.8z'/%3E%3Cpath fill='%23c0392b' d='M14.5 8.5l3.6 6h-7.2z'/%3E%3Cpath fill='%23555' d='M10.9 14.5h7.2l-3.6 6z'/%3E%3C/svg%3E");
+  }
+
   /* The dot stays 28px so a tight shape stays readable, but ::before widens
      the grabbable area to ~46px — the usual reason the map moves instead of
      the pin is a finger landing just outside the dot.
@@ -4167,7 +4179,16 @@
         preserveDrawingBuffer: true,
       });
       // Bottom-right: top-right collides with the floating search bar.
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+      // The compass is on (Matt, 10/18/26): tracing sites he had never stood
+      // on, there was no telling which way was north. The map has always
+      // turned under a two-finger twist, and with the compass off a turned map
+      // showed no sign of it and had no way back. A tap puts north at the top;
+      // visualizePitch makes the same tap lay a tilted map flat, and tilts the
+      // arrow so a tilt shows. It sits in the zoom group, not as a 44px button
+      // in the right column: at the map's 280px minimum height a third button
+      // there would run into this group.
+      map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
+      paintMapTitles();
       map.on('moveend', renderCredit);
       // Remember where the map was left, so the next launch opens on this
       // user's own ground instead of a city chosen for someone else.
@@ -4188,6 +4209,20 @@
       const wrap = document.getElementById('map-wrap');
       if (wrap) wrap.style.display = 'none';
     }
+  }
+
+  // MapLibre titles its own buttons once, in English, and they live inside
+  // #yard-map, which the Spanish pass skips (data-no-es). So they are titled
+  // here, and again by setLang(). tr() hands English back unchanged, which is
+  // what restores it on the way out of Spanish.
+  function paintMapTitles() {
+    if (!map) return;
+    [['.maplibregl-ctrl-zoom-in', 'Zoom in'],
+     ['.maplibregl-ctrl-zoom-out', 'Zoom out'],
+     ['.maplibregl-ctrl-compass', 'Compass — tap to put north at the top']].forEach(([sel, en]) => {
+      const b = map.getContainer().querySelector(sel);
+      if (b) { b.title = tr(en); b.setAttribute('aria-label', tr(en)); }
+    });
   }
 
   function addShapeLayers() {
@@ -4836,7 +4871,11 @@
     try {
       const b = boundsFor(framePins);
       if (!b) return null;
-      map.fitBounds(b, { padding: 40, maxZoom: 20, duration: 0 });
+      // North at the top and the map flat, whatever the screen shows: the
+      // card's north arrow is drawn fixed, pointing up, and this is what keeps
+      // it true. fitBounds alone kept a tilt. prev puts the PM's view back.
+      map.jumpTo({ bearing: 0, pitch: 0 });
+      map.fitBounds(b, { padding: 40, maxZoom: 20, duration: 0, bearing: 0 });
       await waitForMapIdle(5000);
 
       const live = map.getCanvas();
@@ -4927,6 +4966,40 @@
       g.fillText(String(i + 1), p.x, p.y);
       g.textBaseline = 'alphabetic';
     });
+  }
+
+  // The compass glyph in a 29-unit box: the N, the north half, the south half.
+  // The on-screen compass (the CSS background on .maplibregl-ctrl-compass) is
+  // this same drawing -- change one, change both.
+  const COMPASS_GLYPH = [
+    ['#c0392b', 'M11.75 7.5v-6h1.4l2.7 3.8V1.5h1.4v6h-1.4l-2.7-3.8v3.8z'],
+    ['#c0392b', 'M14.5 8.5l3.6 6h-7.2z'],
+    ['#555555', 'M10.9 14.5h7.2l-3.6 6z'],
+  ];
+
+  // The snapshot's north arrow (Matt, 10/18/26). A snapshot is always
+  // north-up -- captureMap() sees to it, and the offline outline is projected
+  // that way -- so this one never turns. A white disc, so it reads over any
+  // aerial; it sits in the card's corner, which the 40px fitBounds padding
+  // keeps clear of the outlines.
+  function drawNorthArrow(g, cx, cy, r) {
+    g.save();
+    g.beginPath();
+    g.arc(cx, cy, r, 0, Math.PI * 2);
+    g.fillStyle = '#ffffff';
+    g.shadowColor = 'rgba(0,0,0,0.35)';
+    g.shadowBlur = 8;
+    g.fill();
+    g.shadowColor = 'transparent';
+    g.strokeStyle = '#d0d0d0';
+    g.lineWidth = 2;
+    g.stroke();
+    // The glyph spans y 1.5-20.5 of its box: centre that span, not the box.
+    const s = (r * 1.3) / 19;
+    g.translate(cx - 14.5 * s, cy - 11 * s);
+    g.scale(s, s);
+    COMPASS_GLYPH.forEach(([fill, d]) => { g.fillStyle = fill; g.fill(new Path2D(d)); });
+    g.restore();
   }
 
   // Fallback for when the map can't be captured (offline, SDK blocked):
@@ -5226,6 +5299,7 @@
     g.lineWidth = 2;
     roundRect(g, cardX, cardTop, cardW, cardH, 16);
     g.stroke();
+    drawNorthArrow(g, cardX + cardW - 54, cardTop + 54, 34);
 
     let cursorY = cardTop + cardH + 60;
 
@@ -6985,6 +7059,10 @@ Start this job at that site?`)) return false;
     'Pins locked — tap to move pins': 'Pines bloqueados — toca para moverlos',
     'Pins movable — tap to lock': 'Pines movibles — toca para bloquear',
     'Show lot lines': 'Mostrar líneas de lote',
+    // MapLibre's own buttons: reached through tr() by paintMapTitles(), never by the pass
+    'Zoom in': 'Acercar',
+    'Zoom out': 'Alejar',
+    'Compass — tap to put north at the top': 'Brújula — toca para poner el norte arriba',
     'Aerial imagery source': 'Fuente de imagen aérea',
     'Best available': 'La mejor disponible',
     'Anchorage 2015 (older)': 'Anchorage 2015 (más vieja)',
@@ -7389,6 +7467,7 @@ Start this job at that site?`)) return false;
     try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
     if (lang !== 'es') restoreEnglish();
     paintLangBtn();
+    paintMapTitles();
     renderAll();
     renderSites && document.getElementById('sites-overlay').classList.contains('open') && renderSites();
     translateNode(document.body);

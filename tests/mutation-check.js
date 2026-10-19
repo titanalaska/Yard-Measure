@@ -150,6 +150,49 @@ const MUTATIONS = [
     replace: '    if (!box) return;',
     caughtBy: 'W on an area',
   },
+  // The compass (10/18/26).
+  {
+    name: 'switch the compass back off',
+    find: 'NavigationControl({ showCompass: true, visualizePitch: true })',
+    replace: 'NavigationControl({ showCompass: false, visualizePitch: true })',
+    caughtBy: 'with north at the top it points straight up',
+  },
+  {
+    name: 'pin the arrow, so it stops turning with the map',
+    find: '  .maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon {\n    background-image:',
+    replace: '  .maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon {\n    transform: none !important;\n    background-image:',
+    caughtBy: 'turns with the map',
+  },
+  {
+    name: 'put north back at the top but leave the map tilted',
+    find: 'NavigationControl({ showCompass: true, visualizePitch: true })',
+    replace: 'NavigationControl({ showCompass: true, visualizePitch: false })',
+    caughtBy: 'lays the map flat',
+  },
+  {
+    name: 'title the map buttons only on a switch, so a Spanish start shows English',
+    find: "'bottom-right');\n      paintMapTitles();",
+    replace: "'bottom-right');",
+    caughtBy: 'say what they do in Spanish',
+  },
+  {
+    name: 'leave the map buttons in Spanish after switching back',
+    find: '    paintLangBtn();\n    paintMapTitles();\n',
+    replace: '    paintLangBtn();\n',
+    caughtBy: 'back in English',
+  },
+  {
+    name: 'snapshot a tilted map tilted, under an arrow that says north is up',
+    find: '      map.jumpTo({ bearing: 0, pitch: 0 });\n',
+    replace: '',
+    caughtBy: 'north at the top and the map flat',
+  },
+  {
+    name: 'leave the north arrow off the snapshot',
+    find: '    drawNorthArrow(g, cardX + cardW - 54, cardTop + 54, 34);\n',
+    replace: '',
+    caughtBy: "carries a north arrow in the map card",
+  },
 ];
 
 const original = fs.readFileSync(SOURCE, 'utf8');
