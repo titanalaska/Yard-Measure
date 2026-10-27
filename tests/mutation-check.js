@@ -9,15 +9,23 @@
 // A mutation that nothing catches is a hole in the suite, not a pass.
 //
 // Run with: npm run verify-tests
-// index.html is never modified -- every mutation goes to a temp copy.
+//   MUTATE_ONLY="import:" runs only the mutations whose name matches (a regex).
+// index.html and export.html are never modified -- every mutation goes to a
+// temp copy, and the suite is pointed at the copy through an env var.
 
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
 const REPO = path.resolve(__dirname, '..');
-const SOURCE = path.join(REPO, 'index.html');
-const MUTANT = path.join(REPO, '_mutant.html'); // gitignored, deleted below
+
+// A mutation names its file (index.html when it does not). Each file has its
+// own throwaway copy, gitignored and deleted below, and its own env var, which
+// is how the tests find the copy instead of the real page.
+const TARGETS = {
+  'index.html':  { mutant: '_mutant.html',        env: 'BOOTPRINT_APP' },
+  'export.html': { mutant: '_mutant-export.html', env: 'BOOTPRINT_EXPORT' },
+};
 
 const MUTATIONS = [
   {
@@ -193,26 +201,78 @@ const MUTATIONS = [
     replace: '',
     caughtBy: "carries a north arrow in the map card",
   },
+  // Import library on export.html (10/26/26). Each guards one rule of the
+  // merge; a hole here would mean an import could quietly lose a library.
+  {
+    file: 'export.html',
+    name: "import: keep only the file's jobs, dropping the stored ones",
+    find: '    var merged = readJobs().slice();',
+    replace: '    var merged = [];',
+    caughtBy: 'keeps the stored jobs',
+  },
+  {
+    file: 'export.html',
+    name: 'import: the refusal writes the file anyway',
+    find: "      return refuse('That is not a Bootprint library export.');",
+    replace: '      pending = countImport(file); return commitImport();',
+    caughtBy: 'is refused and writes nothing',
+  },
+  {
+    file: 'export.html',
+    name: "import: keep this phone's copy of a job the file also has",
+    find: '        merged[at[j.id]] = j;\n        here++;',
+    replace: '        here++;',
+    caughtBy: "takes the file's copy",
+  },
+  {
+    file: 'export.html',
+    name: 'import: write over the job open in the app',
+    find: '      writeJSON(JOBS_KEY, p.merged);',
+    replace: "      writeJSON(JOBS_KEY, p.merged);\n      writeJSON(STATE_KEY, { jobId: 'from the file' });",
+    caughtBy: 'never touched',
+  },
+  {
+    file: 'export.html',
+    name: 'import: let the file overwrite a stored preference',
+    find: '          if (!has(pair[0]) && p.prefs[pair[1]] != null) writeJSON(pair[0], p.prefs[pair[1]]);',
+    replace: '          if (p.prefs[pair[1]] != null) writeJSON(pair[0], p.prefs[pair[1]]);',
+    caughtBy: 'stored preference is kept',
+  },
+  {
+    file: 'export.html',
+    name: 'import: write on the pick, before the count can be read',
+    find: '    pending = countImport(file);\n    importLine = plural(',
+    replace: '    pending = countImport(file);\n    writeJSON(JOBS_KEY, pending.merged);\n    importLine = plural(',
+    caughtBy: 'before anything is written',
+  },
 ];
 
-const original = fs.readFileSync(SOURCE, 'utf8');
-
-// Match the file's own line endings before looking for a mutation.
+// Match each file's own line endings before looking for a mutation.
 //
 // index.html is checked out with CRLF on Windows, but the find strings above
 // are written with bare newlines. Any find that spans more than one line then
 // misses -- and the miss is reported as "the code it patches has moved", which
 // reads like the mutation needs updating when nothing has moved at all. The
-// Earth-radius guard sat unchecked behind exactly that message. It is the only
-// multi-line find in the list, which is why it was the only one affected.
-const EOL = original.includes('\r\n') ? '\r\n' : '\n';
-const eol = (str) => str.split('\r\n').join('\n').split('\n').join(EOL);
+// Earth-radius guard sat unchecked behind exactly that message. It was the
+// only multi-line find in the list, which is why it was the only one affected.
+const sources = {};
+for (const file of Object.keys(TARGETS)) {
+  const text = fs.readFileSync(path.join(REPO, file), 'utf8');
+  const EOL = text.includes('\r\n') ? '\r\n' : '\n';
+  sources[file] = { text, eol: (str) => str.split('\r\n').join('\n').split('\n').join(EOL) };
+}
+
+const only = process.env.MUTATE_ONLY ? new RegExp(process.env.MUTATE_ONLY) : null;
+const chosen = only ? MUTATIONS.filter((m) => only.test(m.name)) : MUTATIONS;
 
 let holes = 0;
 
-console.log(`Checking ${MUTATIONS.length} deliberate bugs against the suite.\n`);
+console.log(`Checking ${chosen.length} deliberate bugs against the suite.\n`);
 
-for (const m of MUTATIONS) {
+for (const m of chosen) {
+  const file = m.file || 'index.html';
+  const target = TARGETS[file];
+  const { text: original, eol } = sources[file];
   if (!original.includes(eol(m.find))) {
     console.log(`  ?  ${m.name}`);
     console.log(`     SKIPPED -- the code it patches has moved. Update this mutation.\n`);
@@ -220,7 +280,7 @@ for (const m of MUTATIONS) {
     continue;
   }
 
-  fs.writeFileSync(MUTANT, original.replace(eol(m.find), eol(m.replace)));
+  fs.writeFileSync(path.join(REPO, target.mutant), original.replace(eol(m.find), eol(m.replace)));
 
   // Run Playwright's CLI through node directly. Going via `npx` fails here:
   // Node on Windows refuses to spawn a .cmd without a shell (EINVAL), and the
@@ -230,7 +290,7 @@ for (const m of MUTATIONS) {
     [require.resolve('@playwright/test/cli'), 'test', '--reporter=json'],
     {
       cwd: REPO,
-      env: { ...process.env, BOOTPRINT_APP: '_mutant.html' },
+      env: { ...process.env, [target.env]: target.mutant },
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024,
     }
@@ -269,11 +329,11 @@ for (const m of MUTATIONS) {
   console.log('');
 }
 
-fs.rmSync(MUTANT, { force: true });
+for (const t of Object.values(TARGETS)) fs.rmSync(path.join(REPO, t.mutant), { force: true });
 
 if (holes === 0) {
-  console.log(`All ${MUTATIONS.length} bugs were caught. The suite has teeth.`);
+  console.log(`All ${chosen.length} bugs were caught. The suite has teeth.`);
   process.exit(0);
 }
-console.log(`${holes} of ${MUTATIONS.length} bugs slipped through. That is a hole in the suite.`);
+console.log(`${holes} of ${chosen.length} bugs slipped through. That is a hole in the suite.`);
 process.exit(1);

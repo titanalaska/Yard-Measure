@@ -165,7 +165,7 @@
 
 <header>
   <h1>Library Export</h1>
-  <p>Bootprint &middot; reads your saved jobs so they can be checked on a laptop</p>
+  <p>Bootprint &middot; your saved jobs, out to a file and back in</p>
 </header>
 
 <main id="main"></main>
@@ -175,18 +175,36 @@
 (function () {
   'use strict';
 
-  // Keys owned by the app. This page only ever READS them.
+  // Keys owned by the app. Export only ever READS them. Import writes exactly
+  // one, the saved-jobs list, and a preference only into a slot this browser
+  // has nothing in. The names are the app's and must never change: renaming a
+  // key does not move its value, it abandons it on every phone.
   var JOBS_KEY    = 'yardMeasureJobs';
   var STATE_KEY   = 'yardMeasureState';
   var SNOW_PREFS  = 'yardMeasureSnowPrefs';
   var FENCE_PREFS = 'yardMeasureFencePrefs';
   var SNOW_TERMS  = 'yardMeasureSnowTerms';
 
+  // The one file this page writes and the one file it takes back.
+  var SCHEMA = 'bootprint-library-export';
+
   function readJSON(k) {
     var raw;
     try { raw = localStorage.getItem(k); } catch (e) { return null; }
     if (!raw) return null;
     try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+  // Whether the slot holds anything at all, parseable or not. A read that
+  // throws counts as "something there": when storage cannot be read it must
+  // not be written either.
+  function has(k) {
+    try { return !!localStorage.getItem(k); } catch (e) { return true; }
+  }
+  function writeJSON(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+
+  function readJobs() {
+    var jobs = readJSON(JOBS_KEY);
+    return Array.isArray(jobs) ? jobs : [];
   }
 
   // The app writes theme into its own state blob. Match it so this page
@@ -195,42 +213,13 @@
   var theme = appState && appState.theme;
   if (theme && theme !== 'auto') document.documentElement.setAttribute('data-theme', theme);
 
-  var jobs = readJSON(JOBS_KEY);
-  if (!Array.isArray(jobs)) jobs = [];
-
-  var payload = {
-    schema: 'bootprint-library-export',
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    origin: location.origin,
-    userAgent: navigator.userAgent,
-    jobCount: jobs.length,
-    jobs: jobs,
-    // The job open in the app may not be filed yet; without this a
-    // measurement taken minutes ago would be missing from the audit.
-    current: appState || null,
-    prefs: {
-      snow: readJSON(SNOW_PREFS),
-      fence: readJSON(FENCE_PREFS),
-      snowTerms: readJSON(SNOW_TERMS)
-    }
-  };
-
-  var json = JSON.stringify(payload, null, 2);
-  var bytes = new Blob([json]).size;
-  // Local date, not toISOString — Alaska runs 8-9 hours behind UTC, so an
-  // evening export would otherwise be stamped with tomorrow's date.
-  var now = new Date();
-  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-  var filename = 'bootprint-library-' + now.getFullYear() + '-' +
-    pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '.json';
-
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
     });
   }
   function num(n) { return (Math.round(n) || 0).toLocaleString(); }
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
   function size(b) {
     return b < 1024 ? b + ' B'
       : b < 1024 * 1024 ? (b / 1024).toFixed(1) + ' KB'
@@ -263,84 +252,6 @@
     return { areas: areas, cuts: cuts, pins: pins };
   }
 
-  var totalSqft = jobs.reduce(function (s, j) { return s + (j.sqft || 0); }, 0);
-  var noCut = jobs.filter(function (j) {
-    var t = tally(j);
-    return t.areas > 0 && t.cuts === 0;
-  }).length;
-
-  var main = document.getElementById('main');
-
-  if (!jobs.length && !appState) {
-    main.innerHTML =
-      '<div class="card empty">' +
-        '<div class="headline">Nothing stored here</div>' +
-        '<p class="sub">This browser has no Bootprint data. The library lives on the ' +
-        'device and in the browser you measured with &mdash; open this page there, ' +
-        'from the same place you open the app.</p>' +
-        '<p class="sub">If you use the installed app, open it first, then load ' +
-        '<strong>bootprint.app/export.html</strong> in that same browser.</p>' +
-        '<a class="linkbtn" href="./">Back to Bootprint</a>' +
-      '</div>';
-    return;
-  }
-
-  var rows = jobs.map(function (j) {
-    var t = tally(j);
-    // Every part here is generated from numbers, so it is safe as-is; only the
-    // job name comes from typing and it gets escaped.
-    var bits = [];
-    if (j.sqft)  bits.push(num(j.sqft) + ' sq ft');
-    if (j.lenFt) bits.push(num(j.lenFt) + ' ft run');
-    bits.push(t.areas + (t.areas === 1 ? ' shape' : ' shapes'));
-    if (t.cuts)  bits.push(t.cuts + ' cut-out' + (t.cuts === 1 ? '' : 's'));
-    bits.push(t.pins + ' pins');
-
-    var badges = '';
-    if (t.areas > 0 && t.cuts === 0)
-      badges += '<span class="badge badge-warn">No cut-outs drawn</span>';
-    if (j.season && j.season !== 'summer')
-      badges += '<span class="badge badge-info">' + esc(j.season) + '</span>';
-
-    return '<div class="job-row">' +
-        '<div class="job-name">' + esc(j.name || 'Untitled') + '</div>' +
-        '<div class="job-meta">' + when(j.savedAt || j.started) + ' &middot; ' +
-          bits.join(' &middot; ') + '</div>' +
-        badges +
-      '</div>';
-  }).join('');
-
-  var hasCurrent = !!(payload.current && Array.isArray(payload.current.zones)
-    && payload.current.zones.some(isDrawn));
-
-  main.innerHTML =
-    '<div class="card">' +
-      '<div class="headline">' + jobs.length + ' <span class="unit">' +
-        (jobs.length === 1 ? 'saved job' : 'saved jobs') + '</span></div>' +
-      '<div class="stats">' +
-        '<div><div class="stat-label">Total measured</div>' +
-          '<div class="stat-value">' + num(totalSqft) + ' <span class="unit">sq ft</span></div></div>' +
-        '<div><div class="stat-label">No cut-outs</div>' +
-          '<div class="stat-value">' + noCut + '</div></div>' +
-        '<div><div class="stat-label">File size</div>' +
-          '<div class="stat-value">' + size(bytes) + '</div></div>' +
-      '</div>' +
-      '<div style="margin-top:var(--s4)">' +
-        '<button class="btn-primary" id="share" hidden>Share file</button>' +
-        '<button class="btn-primary" id="download">Download file</button>' +
-        '<button class="btn-secondary" id="copy">Copy as text</button>' +
-        '<a class="linkbtn" href="./">Back to Bootprint</a>' +
-      '</div>' +
-      '<p class="note">This page only <strong>reads</strong>. It changes nothing and ' +
-      'deletes nothing &mdash; close it and the app is exactly as you left it.</p>' +
-    '</div>' +
-    '<h2>What is in the file</h2>' +
-    rows +
-    (hasCurrent
-      ? '<p class="note">The job open in the app right now is in the file too, ' +
-        'whether or not it has been named.</p>'
-      : '');
-
   function toast(msg) {
     var el = document.getElementById('toast');
     el.textContent = msg;
@@ -348,45 +259,280 @@
     setTimeout(function () { el.classList.remove('on'); }, 2400);
   }
 
-  // Share is the short road from a phone to OneDrive, but a browser can
-  // support sharing text and still refuse file attachments — so the button
-  // only appears once THIS file is known to be shareable.
-  var shareBtn = document.getElementById('share');
-  var shareFile = null;
-  try {
-    shareFile = new File([json], filename, { type: 'application/json' });
-    if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
-      shareBtn.hidden = false;
-      document.getElementById('download').className = 'btn-secondary';
+  // ── Import ──────────────────────────────────────────────────────────────
+  // A picked file is counted first and written only on a second tap, so the
+  // line "5 jobs in the file, 2 already here, 3 new" is read before anything
+  // changes. `pending` is what that tap will write; `importLine` is the
+  // count, the refusal, or the Done line, and survives re-renders.
+  var pending = null;
+  var importLine = '';
+
+  // The merge, by id. Every stored job keeps its place; a job the file also
+  // has takes the file's copy in that place; the file's new jobs follow in
+  // the file's order. Nothing inside a job is read.
+  function countImport(file) {
+    var incoming = file.jobs.filter(function (j) { return !!(j && j.id); });
+    var merged = readJobs().slice();
+    var at = {};
+    merged.forEach(function (j, i) { if (j && j.id) at[j.id] = i; });
+    var here = 0, fresh = 0;
+    incoming.forEach(function (j) {
+      if (Object.prototype.hasOwnProperty.call(at, j.id)) {
+        merged[at[j.id]] = j;
+        here++;
+      } else {
+        at[j.id] = merged.length;
+        merged.push(j);
+        fresh++;
+      }
+    });
+    return {
+      merged: merged,
+      inFile: incoming.length,
+      noId: file.jobs.length - incoming.length,
+      here: here,
+      fresh: fresh,
+      prefs: file.prefs && typeof file.prefs === 'object' ? file.prefs : {}
+    };
+  }
+
+  function refuse(line) {
+    pending = null;
+    importLine = line;
+    render();
+  }
+
+  function importText(text) {
+    var file;
+    try { file = JSON.parse(text); } catch (e) { return refuse("Couldn't read that file."); }
+    if (!file || file.schema !== SCHEMA || !Array.isArray(file.jobs)) {
+      return refuse('That is not a Bootprint library export.');
     }
-  } catch (e) { /* no File constructor: download still works */ }
+    pending = countImport(file);
+    importLine = plural(pending.inFile, 'job') + ' in the file, ' +
+      pending.here + ' already here, ' + pending.fresh + ' new' +
+      (pending.noId ? ' (' + pending.noId + ' with no id, left out)' : '');
+    render();
+  }
 
-  shareBtn.addEventListener('click', function () {
-    navigator.share({ files: [shareFile], title: 'Bootprint library' })
-      .catch(function (err) {
-        if (err && err.name === 'AbortError') return; // backed out, not a failure
-        toast('Share failed — use Download');
-      });
-  });
+  function commitImport() {
+    if (!pending) return;
+    var p = pending;
+    try {
+      writeJSON(JOBS_KEY, p.merged);
+      // A preference travels only into an empty slot. The ones set on this
+      // phone are this phone's.
+      [[SNOW_PREFS, 'snow'], [FENCE_PREFS, 'fence'], [SNOW_TERMS, 'snowTerms']]
+        .forEach(function (pair) {
+          if (!has(pair[0]) && p.prefs[pair[1]] != null) writeJSON(pair[0], p.prefs[pair[1]]);
+        });
+    } catch (e) {
+      // Almost always the 5MB quota. Nothing is trimmed to make room: a
+      // library that does not fit is reported, not quietly shortened.
+      return refuse("Couldn't save — this browser's storage is full.");
+    }
+    pending = null;
+    importLine = 'Done — ' + plural(p.merged.length, 'job') + ' in the library (' +
+      p.fresh + ' new, ' + p.here + ' replaced)';
+    render();
+  }
 
-  document.getElementById('download').addEventListener('click', function () {
-    var url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-    toast('Saved ' + filename);
-  });
+  function importCard() {
+    return '<div class="card" id="import-card">' +
+        '<div class="job-name">Import library</div>' +
+        '<p class="sub">Put a library file back &mdash; one this page saved on another phone ' +
+        'or laptop. A job the file has and this browser does not is added, a job both have ' +
+        'takes the file&#39;s copy, and every other saved job stays as it is.</p>' +
+        (importLine
+          ? '<p class="sub" id="import-status" style="color:var(--text);font-weight:600">' +
+            esc(importLine) + '</p>'
+          : '') +
+        '<div style="margin-top:var(--s3)">' +
+          (pending ? '<button class="btn-primary" id="import-go">Add them to the library</button>' : '') +
+          '<button class="btn-secondary" id="import-btn">Import library</button>' +
+        '</div>' +
+        '<input type="file" id="import-file" accept=".json,application/json" hidden>' +
+      '</div>';
+  }
 
-  document.getElementById('copy').addEventListener('click', function () {
-    if (!navigator.clipboard) { toast('Clipboard unavailable — use Download'); return; }
-    navigator.clipboard.writeText(json)
-      .then(function () { toast('Copied ' + size(bytes)); })
-      .catch(function () { toast('Copy failed — use Download'); });
-  });
+  function wireImport() {
+    var input = document.getElementById('import-file');
+    document.getElementById('import-btn').addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function (e) {
+      var file = e.target.files && e.target.files[0];
+      // Cleared straight away so re-picking the same file fires change again.
+      e.target.value = '';
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () { importText(reader.result); };
+      reader.onerror = function () { refuse("Couldn't read that file."); };
+      reader.readAsText(file);
+    });
+    var goBtn = document.getElementById('import-go');
+    if (goBtn) goBtn.addEventListener('click', commitImport);
+  }
+
+  // ── The page ────────────────────────────────────────────────────────────
+  // Everything is read fresh on each render, so after an import the headline,
+  // the rows and the file behind Download all show the merged library.
+  function render() {
+    var jobs = readJobs();
+
+    var payload = {
+      schema: SCHEMA,
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      origin: location.origin,
+      userAgent: navigator.userAgent,
+      jobCount: jobs.length,
+      jobs: jobs,
+      // The job open in the app may not be filed yet; without this a
+      // measurement taken minutes ago would be missing from the audit.
+      current: appState || null,
+      prefs: {
+        snow: readJSON(SNOW_PREFS),
+        fence: readJSON(FENCE_PREFS),
+        snowTerms: readJSON(SNOW_TERMS)
+      }
+    };
+
+    var json = JSON.stringify(payload, null, 2);
+    var bytes = new Blob([json]).size;
+    // Local date, not toISOString — Alaska runs 8-9 hours behind UTC, so an
+    // evening export would otherwise be stamped with tomorrow's date.
+    var now = new Date();
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var filename = 'bootprint-library-' + now.getFullYear() + '-' +
+      pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '.json';
+
+    var main = document.getElementById('main');
+
+    if (!jobs.length && !appState) {
+      main.innerHTML =
+        '<div class="card empty">' +
+          '<div class="headline">Nothing stored here</div>' +
+          '<p class="sub">This browser has no Bootprint data. The library lives on the ' +
+          'device and in the browser you measured with &mdash; open this page there, ' +
+          'from the same place you open the app.</p>' +
+          '<p class="sub">If you use the installed app, open it first, then load ' +
+          '<strong>bootprint.app/export.html</strong> in that same browser.</p>' +
+          '<p class="sub">Have a library file saved from another phone or laptop? ' +
+          'Import it below and the jobs come back.</p>' +
+          '<a class="linkbtn" href="./">Back to Bootprint</a>' +
+        '</div>' +
+        importCard();
+      wireImport();
+      return;
+    }
+
+    var totalSqft = jobs.reduce(function (s, j) { return s + (j.sqft || 0); }, 0);
+    var noCut = jobs.filter(function (j) {
+      var t = tally(j);
+      return t.areas > 0 && t.cuts === 0;
+    }).length;
+
+    var rows = jobs.map(function (j) {
+      var t = tally(j);
+      // Every part here is generated from numbers, so it is safe as-is; only the
+      // job name comes from typing and it gets escaped.
+      var bits = [];
+      if (j.sqft)  bits.push(num(j.sqft) + ' sq ft');
+      if (j.lenFt) bits.push(num(j.lenFt) + ' ft run');
+      bits.push(t.areas + (t.areas === 1 ? ' shape' : ' shapes'));
+      if (t.cuts)  bits.push(t.cuts + ' cut-out' + (t.cuts === 1 ? '' : 's'));
+      bits.push(t.pins + ' pins');
+
+      var badges = '';
+      if (t.areas > 0 && t.cuts === 0)
+        badges += '<span class="badge badge-warn">No cut-outs drawn</span>';
+      if (j.season && j.season !== 'summer')
+        badges += '<span class="badge badge-info">' + esc(j.season) + '</span>';
+
+      return '<div class="job-row">' +
+          '<div class="job-name">' + esc(j.name || 'Untitled') + '</div>' +
+          '<div class="job-meta">' + when(j.savedAt || j.started) + ' &middot; ' +
+            bits.join(' &middot; ') + '</div>' +
+          badges +
+        '</div>';
+    }).join('');
+
+    var hasCurrent = !!(payload.current && Array.isArray(payload.current.zones)
+      && payload.current.zones.some(isDrawn));
+
+    main.innerHTML =
+      '<div class="card">' +
+        '<div class="headline">' + jobs.length + ' <span class="unit">' +
+          (jobs.length === 1 ? 'saved job' : 'saved jobs') + '</span></div>' +
+        '<div class="stats">' +
+          '<div><div class="stat-label">Total measured</div>' +
+            '<div class="stat-value">' + num(totalSqft) + ' <span class="unit">sq ft</span></div></div>' +
+          '<div><div class="stat-label">No cut-outs</div>' +
+            '<div class="stat-value">' + noCut + '</div></div>' +
+          '<div><div class="stat-label">File size</div>' +
+            '<div class="stat-value">' + size(bytes) + '</div></div>' +
+        '</div>' +
+        '<div style="margin-top:var(--s4)">' +
+          '<button class="btn-primary" id="share" hidden>Share file</button>' +
+          '<button class="btn-primary" id="download">Download file</button>' +
+          '<button class="btn-secondary" id="copy">Copy as text</button>' +
+          '<a class="linkbtn" href="./">Back to Bootprint</a>' +
+        '</div>' +
+        '<p class="note">Export only <strong>reads</strong>: Download, Share and Copy change ' +
+        'nothing and delete nothing. Import writes the saved-jobs list and nothing else ' +
+        '&mdash; the job open in the app is left as it is.</p>' +
+      '</div>' +
+      importCard() +
+      '<h2>What is in the file</h2>' +
+      rows +
+      (hasCurrent
+        ? '<p class="note">The job open in the app right now is in the file too, ' +
+          'whether or not it has been named.</p>'
+        : '');
+
+    wireImport();
+
+    // Share is the short road from a phone to OneDrive, but a browser can
+    // support sharing text and still refuse file attachments — so the button
+    // only appears once THIS file is known to be shareable.
+    var shareBtn = document.getElementById('share');
+    var shareFile = null;
+    try {
+      shareFile = new File([json], filename, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+        shareBtn.hidden = false;
+        document.getElementById('download').className = 'btn-secondary';
+      }
+    } catch (e) { /* no File constructor: download still works */ }
+
+    shareBtn.addEventListener('click', function () {
+      navigator.share({ files: [shareFile], title: 'Bootprint library' })
+        .catch(function (err) {
+          if (err && err.name === 'AbortError') return; // backed out, not a failure
+          toast('Share failed — use Download');
+        });
+    });
+
+    document.getElementById('download').addEventListener('click', function () {
+      var url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      toast('Saved ' + filename);
+    });
+
+    document.getElementById('copy').addEventListener('click', function () {
+      if (!navigator.clipboard) { toast('Clipboard unavailable — use Download'); return; }
+      navigator.clipboard.writeText(json)
+        .then(function () { toast('Copied ' + size(bytes)); })
+        .catch(function () { toast('Copy failed — use Download'); });
+    });
+  }
+
+  render();
 })();
 </script>
 </body>
