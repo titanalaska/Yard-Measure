@@ -457,7 +457,7 @@
 
   .site-form textarea { min-height: 56px; resize: vertical; }
 
-  #site-search {
+  #site-search, #job-search {
     width: 100%;
     padding: 12px 14px;
     margin-bottom: 8px;
@@ -469,7 +469,8 @@
     background: var(--surface);
   }
 
-  #site-search:focus { outline: none; border-color: var(--green-light); }
+  #site-search:focus, #job-search:focus { outline: none; border-color: var(--green-light); }
+  #job-search { margin: 12px 0 0; }
 
   /* STATUS BAR */
   /* Read at arm's length, outdoors, in sun — so the accuracy figure is the
@@ -1699,6 +1700,7 @@
     <button class="btn btn-secondary" id="install-btn" type="button" style="display:none;margin-top:8px;">
       <svg class="ic"><use href="#i-install"/></svg> Add to home screen
     </button>
+    <input type="search" id="job-search" placeholder="Search jobs by name or site" hidden>
     <div id="jobs-list"></div>
     <a class="btn btn-secondary" id="export-link" href="./export.html">
       <svg class="ic"><use href="#i-share"/></svg> Export library
@@ -2576,6 +2578,24 @@
   function locationOff() {
     setStatus('Location off — tap here to turn it on, or tap the map to place corners', 'red');
     document.getElementById('status-bar').classList.add('actionable');
+    armTapForNoGps();
+  }
+
+  // The status bar says "tap the map to place corners", so a tap on the map
+  // has to do that. Before 11/23 it did nothing until the user found the Tap
+  // to add button, which a tester who just said "Not now" had no reason to
+  // know about. Arm it for them, and disarm it again if GPS is turned on
+  // later, so a crew walking corners doesn't drop pins by touching the map.
+  // Left alone if they already chose a way to place corners themselves.
+  let tapArmedForNoGps = false;
+  function armTapForNoGps() {
+    if (state.tapMode || state.crosshair) return;
+    setTapMode(true);
+    tapArmedForNoGps = true;
+  }
+  function disarmTapForGps() {
+    if (tapArmedForNoGps && state.tapMode) setTapMode(false);
+    tapArmedForNoGps = false;
   }
 
   // Startup entry point, replacing the old bare startGPS().
@@ -2589,6 +2609,7 @@
   document.getElementById('gps-accept').addEventListener('click', () => {
     hideLocationDisclosure();
     setLocationConsent('ok');
+    disarmTapForGps();
     document.getElementById('status-bar').classList.remove('actionable');
     // Only now does the OS prompt appear, which is the whole point of the gate.
     startGPS();
@@ -2660,6 +2681,10 @@
     };
     setStatus(msgs[err.code] || 'GPS error', 'red');
     gpsDot.className = 'status-dot red';
+    // Denied at the system prompt is as final as "Not now": map taps are the
+    // only way left to place corners. Weak signal or a timeout may recover,
+    // so those leave the mode as it is.
+    if (err.code === 1) armTapForNoGps();
   }
 
   function setStatus(html, color) {
@@ -4382,7 +4407,10 @@
     if (on && state.crosshair) setCrosshair(false);
   }
 
-  tapModeBtn.addEventListener('click', () => setTapMode(!state.tapMode));
+  tapModeBtn.addEventListener('click', () => {
+    tapArmedForNoGps = false; // the user's own choice now; GPS turning on won't undo it
+    setTapMode(!state.tapMode);
+  });
 
   // ── LOT LINES ────────────────────────────────────────
   // Assessor parcel boundaries, easements and building footprints, drawn from
@@ -6707,7 +6735,12 @@ Start this job at that site?`)) return false;
   // writes itself into a list as you work, so nothing has to be remembered or
   // explicitly saved — the failure mode was losing a number someone bids off.
   const JOBS_KEY = 'yardMeasureJobs';
-  const MAX_JOBS = 60;
+  // Was 60, and the 61st job silently pushed the oldest off (11/23). A job is
+  // a few KB, so 200 is still far under the storage quota, and writeJobs()
+  // keeps its quota fallback. syncCurrentJob() now warns as the list fills
+  // and names any job that falls off.
+  const MAX_JOBS = 200;
+  const JOBS_WARN_AT = MAX_JOBS - 10;
 
   function readJobs() {
     try { return JSON.parse(localStorage.getItem(JOBS_KEY)) || []; } catch (e) { return []; }
@@ -6762,9 +6795,56 @@ Start this job at that site?`)) return false;
   function syncCurrentJob() {
     if (!state.zones.some(isDrawn)) return;
     stampSiteLocation();
-    const jobs = readJobs().filter(j => j.id !== state.jobId);
-    jobs.unshift(snapshotOfCurrentJob());
-    writeJobs(jobs.slice(0, MAX_JOBS));
+    const saved = readJobs();
+    const snap = snapshotOfCurrentJob();
+    // Only looking is not measuring (11/23). This runs on every save,
+    // including just opening a job or the Jobs sheet, and it used to stamp the
+    // job with the current time and move it to the top every time — so
+    // checking last week's number made it read as measured today, and the
+    // list reshuffled under the finger. Now a job whose name, site and zones
+    // are unchanged is still written (season and snow settings ride along)
+    // but keeps its date and its place.
+    const prevIdx = saved.findIndex(j => j.id === state.jobId);
+    if (prevIdx >= 0 && jobSignature(saved[prevIdx]) === jobSignature(snap)) {
+      snap.savedAt = saved[prevIdx].savedAt;
+      saved[prevIdx] = snap;
+      writeJobs(saved);
+      return;
+    }
+    const isNew = prevIdx < 0;
+    const jobs = saved.filter(j => j.id !== state.jobId);
+    jobs.unshift(snap);
+    const dropped = jobs.slice(MAX_JOBS);
+    const ok = writeJobs(jobs.slice(0, MAX_JOBS));
+    if (!ok || !isNew) return;
+    // writeJobs() already said so if the storage quota made it trim the list.
+    if (readJobs().length < Math.min(jobs.length, MAX_JOBS)) return;
+    if (dropped.length) {
+      showToast(`Saved jobs are full — removed the oldest, "${dropped[0].name}". Export library keeps a copy`);
+    } else if (jobs.length >= JOBS_WARN_AT) {
+      showToast(`${jobs.length} of ${MAX_JOBS} saved jobs — the oldest drop off after that. Export library keeps a copy`);
+    }
+  }
+
+  // What counts as a change to a job: its name, its site and its zones.
+  // Zones get the same defaults openJob() fills in, id counters are left out,
+  // and keys are sorted, so a job does not count as changed just because a
+  // load path rebuilt it in a different shape.
+  function jobSignature(j) {
+    const zones = JSON.parse(JSON.stringify(j.zones || []));
+    zones.forEach(z => {
+      if (!z.mode) z.mode = 'area';
+      if (!z.surface) z.surface = 'plow';
+      if (typeof z.fence !== 'boolean') z.fence = false;
+      if (!Array.isArray(z.gates)) z.gates = [];
+      delete z.nextGateId;
+      delete z.nextLayerId;
+    });
+    const canon = v => Array.isArray(v) ? v.map(canon)
+      : v && typeof v === 'object'
+        ? Object.keys(v).sort().reduce((o, k) => { o[k] = canon(v[k]); return o; }, {})
+        : v;
+    return JSON.stringify(canon([j.name, j.siteId || null, zones]));
   }
 
   function startNewJob(seed) {
@@ -6853,14 +6933,32 @@ Start this job at that site?`)) return false;
     showToast(`Opened ${job.name}`);
   }
 
+  // Same rule as the site library: every typed word must appear somewhere,
+  // in the job's name or its linked site's label, address or customer.
+  function jobMatches(j, q) {
+    if (!q) return true;
+    const site = getSite(j.siteId);
+    const hay = [j.name, site && site.label, site && site.address, site && site.customer]
+      .join(' ').toLowerCase();
+    return q.toLowerCase().split(/\s+/).filter(Boolean).every(t => hay.includes(t));
+  }
+
   function renderJobs() {
     const jobs = readJobs();
     const list = document.getElementById('jobs-list');
+    const search = document.getElementById('job-search');
+    search.hidden = !jobs.length;
     if (!jobs.length) {
       list.innerHTML = '<div class="empty-state">No saved jobs yet — measure something and it lands here</div>';
       return;
     }
-    list.innerHTML = jobs.map(j => {
+    const q = search.value.trim();
+    const shown = jobs.filter(j => jobMatches(j, q));
+    if (!shown.length) {
+      list.innerHTML = `<div class="empty-state">Nothing matches “${escapeHtml(q)}”</div>`;
+      return;
+    }
+    list.innerHTML = shown.map(j => {
       const when = new Date(j.savedAt).toLocaleString([], {
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       const bits = [];
@@ -6880,6 +6978,8 @@ Start this job at that site?`)) return false;
 
   function openJobs() {
     syncCurrentJob();
+    // A search left over from last time would hide jobs without saying why.
+    document.getElementById('job-search').value = '';
     renderJobs();
     renderOfflineNote();
     document.getElementById('jobs-overlay').classList.add('open');
@@ -6890,6 +6990,7 @@ Start this job at that site?`)) return false;
   }
 
   document.getElementById('jobs-btn').addEventListener('click', openJobs);
+  document.getElementById('job-search').addEventListener('input', renderJobs);
   document.getElementById('jobs-close').addEventListener('click', closeJobs);
   document.getElementById('jobs-overlay').addEventListener('click', (e) => {
     if (e.target.id === 'jobs-overlay') closeJobs();
@@ -6993,6 +7094,7 @@ Start this job at that site?`)) return false;
     'Not now': 'Ahora no',
     'Continue': 'Continuar',
     'Search label, address, customer or group': 'Buscar nombre, dirección, cliente o grupo',
+    'Search jobs by name or site': 'Buscar trabajos por nombre o sitio',
     'Add a site': 'Agregar un sitio',
     'Label - what the crew calls it': 'Nombre - como le dice la cuadrilla',
     'Address': 'Dirección',
@@ -7257,6 +7359,10 @@ Start this job at that site?`)) return false;
     [/^Clear all pins, layers, and gate openings in "(.+)"\?$/, '¿Borrar todos los pines, capas y puertas de "$1"?'],
     [/^Clear all pins and layers in "(.+)"\?$/, '¿Borrar todos los pines y capas de "$1"?'],
     [/^Corner (\d+) placed$/, 'Esquina $1 puesta'],
+    [/^Saved jobs are full — removed the oldest, "(.+)"\. Export library keeps a copy$/,
+      'Trabajos guardados llenos — se quitó el más viejo, "$1". Exportar biblioteca guarda una copia'],
+    [/^(\d+) of (\d+) saved jobs — the oldest drop off after that\. Export library keeps a copy$/,
+      '$1 de $2 trabajos guardados — después de eso se quitan los más viejos. Exportar biblioteca guarda una copia'],
     [/^Jumped to (.+)$/, 'Se movió a $1'],
     [/^Imagery: (.+) · here ≈ (.+) ft per tapped corner$/, 'Imagen: $1 · aquí ≈ $2 ft por esquina tocada'],
     [/^Map layer problem: (\d+) layers? did not load$/, 'Problema en el mapa: no cargaron $1 capa(s)'],
