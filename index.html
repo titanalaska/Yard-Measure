@@ -2576,6 +2576,24 @@
   function locationOff() {
     setStatus('Location off — tap here to turn it on, or tap the map to place corners', 'red');
     document.getElementById('status-bar').classList.add('actionable');
+    armTapForNoGps();
+  }
+
+  // The status bar says "tap the map to place corners", so a tap on the map
+  // has to do that. Before 11/23 it did nothing until the user found the Tap
+  // to add button, which a tester who just said "Not now" had no reason to
+  // know about. Arm it for them, and disarm it again if GPS is turned on
+  // later, so a crew walking corners doesn't drop pins by touching the map.
+  // Left alone if they already chose a way to place corners themselves.
+  let tapArmedForNoGps = false;
+  function armTapForNoGps() {
+    if (state.tapMode || state.crosshair) return;
+    setTapMode(true);
+    tapArmedForNoGps = true;
+  }
+  function disarmTapForGps() {
+    if (tapArmedForNoGps && state.tapMode) setTapMode(false);
+    tapArmedForNoGps = false;
   }
 
   // Startup entry point, replacing the old bare startGPS().
@@ -2589,6 +2607,7 @@
   document.getElementById('gps-accept').addEventListener('click', () => {
     hideLocationDisclosure();
     setLocationConsent('ok');
+    disarmTapForGps();
     document.getElementById('status-bar').classList.remove('actionable');
     // Only now does the OS prompt appear, which is the whole point of the gate.
     startGPS();
@@ -2660,6 +2679,10 @@
     };
     setStatus(msgs[err.code] || 'GPS error', 'red');
     gpsDot.className = 'status-dot red';
+    // Denied at the system prompt is as final as "Not now": map taps are the
+    // only way left to place corners. Weak signal or a timeout may recover,
+    // so those leave the mode as it is.
+    if (err.code === 1) armTapForNoGps();
   }
 
   function setStatus(html, color) {
@@ -4382,7 +4405,10 @@
     if (on && state.crosshair) setCrosshair(false);
   }
 
-  tapModeBtn.addEventListener('click', () => setTapMode(!state.tapMode));
+  tapModeBtn.addEventListener('click', () => {
+    tapArmedForNoGps = false; // the user's own choice now; GPS turning on won't undo it
+    setTapMode(!state.tapMode);
+  });
 
   // ── LOT LINES ────────────────────────────────────────
   // Assessor parcel boundaries, easements and building footprints, drawn from
@@ -6707,7 +6733,12 @@ Start this job at that site?`)) return false;
   // writes itself into a list as you work, so nothing has to be remembered or
   // explicitly saved — the failure mode was losing a number someone bids off.
   const JOBS_KEY = 'yardMeasureJobs';
-  const MAX_JOBS = 60;
+  // Was 60, and the 61st job silently pushed the oldest off (11/23). A job is
+  // a few KB, so 200 is still far under the storage quota, and writeJobs()
+  // keeps its quota fallback. syncCurrentJob() now warns as the list fills
+  // and names any job that falls off.
+  const MAX_JOBS = 200;
+  const JOBS_WARN_AT = MAX_JOBS - 10;
 
   function readJobs() {
     try { return JSON.parse(localStorage.getItem(JOBS_KEY)) || []; } catch (e) { return []; }
@@ -6762,9 +6793,20 @@ Start this job at that site?`)) return false;
   function syncCurrentJob() {
     if (!state.zones.some(isDrawn)) return;
     stampSiteLocation();
-    const jobs = readJobs().filter(j => j.id !== state.jobId);
+    const saved = readJobs();
+    const isNew = !saved.some(j => j.id === state.jobId);
+    const jobs = saved.filter(j => j.id !== state.jobId);
     jobs.unshift(snapshotOfCurrentJob());
-    writeJobs(jobs.slice(0, MAX_JOBS));
+    const dropped = jobs.slice(MAX_JOBS);
+    const ok = writeJobs(jobs.slice(0, MAX_JOBS));
+    if (!ok || !isNew) return;
+    // writeJobs() already said so if the storage quota made it trim the list.
+    if (readJobs().length < Math.min(jobs.length, MAX_JOBS)) return;
+    if (dropped.length) {
+      showToast(`Saved jobs are full — removed the oldest, "${dropped[0].name}". Export library keeps a copy`);
+    } else if (jobs.length >= JOBS_WARN_AT) {
+      showToast(`${jobs.length} of ${MAX_JOBS} saved jobs — the oldest drop off after that. Export library keeps a copy`);
+    }
   }
 
   function startNewJob(seed) {
@@ -7257,6 +7299,10 @@ Start this job at that site?`)) return false;
     [/^Clear all pins, layers, and gate openings in "(.+)"\?$/, '¿Borrar todos los pines, capas y puertas de "$1"?'],
     [/^Clear all pins and layers in "(.+)"\?$/, '¿Borrar todos los pines y capas de "$1"?'],
     [/^Corner (\d+) placed$/, 'Esquina $1 puesta'],
+    [/^Saved jobs are full — removed the oldest, "(.+)"\. Export library keeps a copy$/,
+      'Trabajos guardados llenos — se quitó el más viejo, "$1". Exportar biblioteca guarda una copia'],
+    [/^(\d+) of (\d+) saved jobs — the oldest drop off after that\. Export library keeps a copy$/,
+      '$1 de $2 trabajos guardados — después de eso se quitan los más viejos. Exportar biblioteca guarda una copia'],
     [/^Jumped to (.+)$/, 'Se movió a $1'],
     [/^Imagery: (.+) · here ≈ (.+) ft per tapped corner$/, 'Imagen: $1 · aquí ≈ $2 ft por esquina tocada'],
     [/^Map layer problem: (\d+) layers? did not load$/, 'Problema en el mapa: no cargaron $1 capa(s)'],
