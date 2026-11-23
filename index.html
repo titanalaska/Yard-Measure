@@ -457,7 +457,7 @@
 
   .site-form textarea { min-height: 56px; resize: vertical; }
 
-  #site-search {
+  #site-search, #job-search {
     width: 100%;
     padding: 12px 14px;
     margin-bottom: 8px;
@@ -469,7 +469,8 @@
     background: var(--surface);
   }
 
-  #site-search:focus { outline: none; border-color: var(--green-light); }
+  #site-search:focus, #job-search:focus { outline: none; border-color: var(--green-light); }
+  #job-search { margin: 12px 0 0; }
 
   /* STATUS BAR */
   /* Read at arm's length, outdoors, in sun — so the accuracy figure is the
@@ -1699,6 +1700,7 @@
     <button class="btn btn-secondary" id="install-btn" type="button" style="display:none;margin-top:8px;">
       <svg class="ic"><use href="#i-install"/></svg> Add to home screen
     </button>
+    <input type="search" id="job-search" placeholder="Search jobs by name or site" hidden>
     <div id="jobs-list"></div>
     <a class="btn btn-secondary" id="export-link" href="./export.html">
       <svg class="ic"><use href="#i-share"/></svg> Export library
@@ -6794,9 +6796,24 @@ Start this job at that site?`)) return false;
     if (!state.zones.some(isDrawn)) return;
     stampSiteLocation();
     const saved = readJobs();
-    const isNew = !saved.some(j => j.id === state.jobId);
+    const snap = snapshotOfCurrentJob();
+    // Only looking is not measuring (11/23). This runs on every save,
+    // including just opening a job or the Jobs sheet, and it used to stamp the
+    // job with the current time and move it to the top every time — so
+    // checking last week's number made it read as measured today, and the
+    // list reshuffled under the finger. Now a job whose name, site and zones
+    // are unchanged is still written (season and snow settings ride along)
+    // but keeps its date and its place.
+    const prevIdx = saved.findIndex(j => j.id === state.jobId);
+    if (prevIdx >= 0 && jobSignature(saved[prevIdx]) === jobSignature(snap)) {
+      snap.savedAt = saved[prevIdx].savedAt;
+      saved[prevIdx] = snap;
+      writeJobs(saved);
+      return;
+    }
+    const isNew = prevIdx < 0;
     const jobs = saved.filter(j => j.id !== state.jobId);
-    jobs.unshift(snapshotOfCurrentJob());
+    jobs.unshift(snap);
     const dropped = jobs.slice(MAX_JOBS);
     const ok = writeJobs(jobs.slice(0, MAX_JOBS));
     if (!ok || !isNew) return;
@@ -6807,6 +6824,27 @@ Start this job at that site?`)) return false;
     } else if (jobs.length >= JOBS_WARN_AT) {
       showToast(`${jobs.length} of ${MAX_JOBS} saved jobs — the oldest drop off after that. Export library keeps a copy`);
     }
+  }
+
+  // What counts as a change to a job: its name, its site and its zones.
+  // Zones get the same defaults openJob() fills in, id counters are left out,
+  // and keys are sorted, so a job does not count as changed just because a
+  // load path rebuilt it in a different shape.
+  function jobSignature(j) {
+    const zones = JSON.parse(JSON.stringify(j.zones || []));
+    zones.forEach(z => {
+      if (!z.mode) z.mode = 'area';
+      if (!z.surface) z.surface = 'plow';
+      if (typeof z.fence !== 'boolean') z.fence = false;
+      if (!Array.isArray(z.gates)) z.gates = [];
+      delete z.nextGateId;
+      delete z.nextLayerId;
+    });
+    const canon = v => Array.isArray(v) ? v.map(canon)
+      : v && typeof v === 'object'
+        ? Object.keys(v).sort().reduce((o, k) => { o[k] = canon(v[k]); return o; }, {})
+        : v;
+    return JSON.stringify(canon([j.name, j.siteId || null, zones]));
   }
 
   function startNewJob(seed) {
@@ -6895,14 +6933,32 @@ Start this job at that site?`)) return false;
     showToast(`Opened ${job.name}`);
   }
 
+  // Same rule as the site library: every typed word must appear somewhere,
+  // in the job's name or its linked site's label, address or customer.
+  function jobMatches(j, q) {
+    if (!q) return true;
+    const site = getSite(j.siteId);
+    const hay = [j.name, site && site.label, site && site.address, site && site.customer]
+      .join(' ').toLowerCase();
+    return q.toLowerCase().split(/\s+/).filter(Boolean).every(t => hay.includes(t));
+  }
+
   function renderJobs() {
     const jobs = readJobs();
     const list = document.getElementById('jobs-list');
+    const search = document.getElementById('job-search');
+    search.hidden = !jobs.length;
     if (!jobs.length) {
       list.innerHTML = '<div class="empty-state">No saved jobs yet — measure something and it lands here</div>';
       return;
     }
-    list.innerHTML = jobs.map(j => {
+    const q = search.value.trim();
+    const shown = jobs.filter(j => jobMatches(j, q));
+    if (!shown.length) {
+      list.innerHTML = `<div class="empty-state">Nothing matches “${escapeHtml(q)}”</div>`;
+      return;
+    }
+    list.innerHTML = shown.map(j => {
       const when = new Date(j.savedAt).toLocaleString([], {
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       const bits = [];
@@ -6922,6 +6978,8 @@ Start this job at that site?`)) return false;
 
   function openJobs() {
     syncCurrentJob();
+    // A search left over from last time would hide jobs without saying why.
+    document.getElementById('job-search').value = '';
     renderJobs();
     renderOfflineNote();
     document.getElementById('jobs-overlay').classList.add('open');
@@ -6932,6 +6990,7 @@ Start this job at that site?`)) return false;
   }
 
   document.getElementById('jobs-btn').addEventListener('click', openJobs);
+  document.getElementById('job-search').addEventListener('input', renderJobs);
   document.getElementById('jobs-close').addEventListener('click', closeJobs);
   document.getElementById('jobs-overlay').addEventListener('click', (e) => {
     if (e.target.id === 'jobs-overlay') closeJobs();
@@ -7035,6 +7094,7 @@ Start this job at that site?`)) return false;
     'Not now': 'Ahora no',
     'Continue': 'Continuar',
     'Search label, address, customer or group': 'Buscar nombre, dirección, cliente o grupo',
+    'Search jobs by name or site': 'Buscar trabajos por nombre o sitio',
     'Add a site': 'Agregar un sitio',
     'Label - what the crew calls it': 'Nombre - como le dice la cuadrilla',
     'Address': 'Dirección',
